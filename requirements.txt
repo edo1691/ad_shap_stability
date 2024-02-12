@@ -3,6 +3,7 @@ numpy==1.25
 matplotlib
 chardet==5.2.0
 shap==0.43.0 # Airflow 0.42.0
+shap-selection
 lime==0.2.0.1
 scikit-learn==1.3.1
 #scikit-learn==1.1.2
@@ -13,3 +14,4 @@ openai==0.28.1
 cython==3.0.5
 seaborn==0.13.0
 black
+ipympl
