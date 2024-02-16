@@ -3,7 +3,8 @@ from sklearn.ensemble import IsolationForest
 from src.metric.functions import metrics_iforest
 
 
-def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n_tree_estimators=None,
+def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n_feat_estimators=None,
+                               n_tree_estimators=None,
                                contamination_percentage=None, excluded_cols=None,
                                n_iter_fs=5, n_iter=1):
     """
@@ -39,6 +40,8 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
         contamination_percentage = [1]
     if n_tree_estimators is None:
         n_tree_estimators = [100]
+    if n_feat_estimators is None:
+        n_feat_estimators = 'auto'
     if excluded_cols is None:
         excluded_cols_all = ['y', 'y_pred', 'prediction', 'y_scores']
     else:
@@ -58,9 +61,9 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
     dataset_id = dataset_id.lower()
 
     # Initialize lists to store the results of each iteration
-    n_tree_list, n_cont_list, n_iter_list, n_iter_fs_list, n_feats_list, n_roc_auc, iforest_stab_unif_median_list, \
-    shap_iforest_stab_unif_median_list, auc_precision_recall_median_list, f1_median_list, recall_median_list, \
-    precision_median_list, conf_m_list = ([] for _ in range(13))
+    n_tree_list, n_feat_list, n_cont_list, n_iter_list, n_iter_fs_list, n_feats_list, n_roc_auc, model_stab_list, \
+    shap_stab_list, shap_stab_ad_list, auc_precision_recall_median_list, f1_median_list, recall_median_list, \
+    precision_median_list, conf_m_list = ([] for _ in range(15))
 
     # Get hyperparameters specific to the dataset
     factor = hyper['contamination']
@@ -79,56 +82,67 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
 
             # Iterate over selected feature sets
             for feat_selected in feat_list:
-                print('    Number of featured:', len(feat_selected))
+                print(f'    Number of featured: {len(feat_selected)}')
                 train_data = X[feat_selected]
+                feat_estim = len(train_data.columns)
+                n_feat_estimators = [int(feat_estim)]
                 train_data['y'] = y  # Add the target variable 'y' back to the training data
 
-                # Perform model training and evaluation for each iteration
-                for j in range(n_iter):
-                    # Train the Isolation Forest model and make predictions
-                    model, y_pred, y_scores, y_decision = train_and_predict_iforest(train_data, hyper,
-                                                                                    excluded_cols_all,
-                                                                                    random_state=j)
+                # Iterate over the number of feat parameter
+                for feat_number in n_feat_estimators:
+                    hyper['max_features'] = feat_number
+                    print(f'     Iteration by feat number: {feat_number}')
+                    # Perform model training and evaluation for each iteration
+                    for j in range(n_iter):
+                        # Train the Isolation Forest model and make predictions
+                        model, y_pred, y_scores, y_decision = train_and_predict_iforest(train_data,
+                                                                                        hyper,
+                                                                                        excluded_cols_all,
+                                                                                        random_state=j)
 
-                    # Add predictions to the training data for evaluation
-                    train_data['y_pred'] = y_pred
-                    train_data['y_deci'] = y_decision
-                    train_data['prediction'] = train_data.apply(def_outlier, axis=1)
-                    train_data['y_scores'] = y_scores
+                        # Add predictions to the training data for evaluation
+                        train_data['y_pred'] = y_pred
+                        train_data['y_deci'] = y_decision
+                        train_data['prediction'] = train_data.apply(def_outlier, axis=1)
+                        train_data['y_scores'] = y_scores
 
-                    # Calculate evaluation metrics
-                    iforest_report, conf_m, roc_auc, iforest_stab_unif, shap_iforest_stab_unif = metrics_iforest(
-                        train_data.loc[:, ~train_data.columns.isin(excluded_cols)], model, hyper)
+                        # Calculate evaluation metrics
+                        report, conf_m, roc_auc, model_stab, shap_stab, shap_stab_ad = metrics_iforest(
+                            train_data.loc[:, ~train_data.columns.isin(excluded_cols)], model, hyper)
 
-                    # Store the results of this iteration
-                    n_tree_list.append(tree_number)
-                    n_cont_list.append(var_contamination)
-                    n_iter_list.append(j + 1)
-                    n_iter_fs_list.append(n_iter_fs)
-                    n_feats_list.append(len(feat_selected))
-                    n_roc_auc.append(roc_auc)
-                    iforest_stab_unif_median_list.append(iforest_stab_unif)
-                    shap_iforest_stab_unif_median_list.append(shap_iforest_stab_unif)
-                    f1_median_list.append(iforest_report['1']['f1-score'])
-                    recall_median_list.append(iforest_report['1']['recall'])
-                    precision_median_list.append(iforest_report['1']['precision'])
-                    conf_m_list.append(conf_m)
+                        # Store the results of this iteration
+                        n_tree_list.append(tree_number)
+                        n_feat_list.append(feat_number)
+                        n_cont_list.append(var_contamination)
+                        n_iter_list.append(j + 1)
+                        n_iter_fs_list.append(n_iter_fs)
+                        n_feats_list.append(len(feat_selected))
+                        n_roc_auc.append(roc_auc)
+                        model_stab_list.append(model_stab)
+                        shap_stab_list.append(shap_stab)
+                        shap_stab_ad_list.append(shap_stab_ad)
+                        f1_median_list.append(report['1']['f1-score'])
+                        recall_median_list.append(report['1']['recall'])
+                        precision_median_list.append(report['1']['precision'])
+                        conf_m_list.append(conf_m)
 
-                # After all iterations, compile the results into a DataFrame
-                result_df = pd.DataFrame({
-                    'n_estimators': n_tree_list,
-                    'contamination': n_cont_list,
-                    'n_feats': n_feats_list,
-                    'n_iter': n_iter_list,
-                    'n_iter_fs': n_iter_fs_list,
-                    'roc_auc': n_roc_auc,
-                    'iforest_stab_unif_median': iforest_stab_unif_median_list,
-                    'shap_iforest_stab_unif_median': shap_iforest_stab_unif_median_list,
-                    'f1_median': f1_median_list,
-                    'recall_median': recall_median_list,
-                    'precision_median': precision_median_list,
-                    'confusion_matrix': conf_m_list
-                })
+                    # After all iterations, compile the results into a DataFrame
+                    result_df = pd.DataFrame({
+                        'n_estimators': n_tree_list,
+                        'max_feats': n_feat_list,
+                        'contamination': n_cont_list,
+                        'n_feats': n_feats_list,
+                        'n_iter': n_iter_list,
+                        'n_iter_fs': n_iter_fs_list,
+                        'roc_auc': n_roc_auc,
+                        'model_stab': model_stab_list,
+                        'shap_stab': shap_stab_list,
+                        'shap_stab_ad': shap_stab_ad_list,
+                        'f1_median': f1_median_list,
+                        'recall': recall_median_list,
+                        'precision': precision_median_list,
+                        'confusion_matrix': conf_m_list
+                    })
 
     # Return the compiled results DataFrame
     return result_df

@@ -25,28 +25,28 @@ def get_fs_dataset(dataset_id, path):
         df["y"] = y
 
         y = np.array(df["y"])
+    if dataset_id == "creditcard":
+        data_root = os.path.join(path, "inputs", dataset_id + ".csv")
+        df = pd.read_csv(data_root)
+        df.rename(columns={'Class': 'y'}, inplace=True)
+        df.drop(['Time', 'Amount'], axis=1, inplace=True)
+
     return df
 
 
 def fs_datasets_hyperparams(dataset):
     data = {
-        # cardio
-        ("cardio"): {"contamination": 0.1, "max_samples": 64, "n_estimators": 150},
-        # cardio
+        # arrhythmia
         ("arrhythmia"): {
             "contamination": 0.146,
             "max_samples": 256,
             "n_estimators": 100,
         },
-        # ionosphere
-        ("ionosphere"): {"contamination": 0.2, "max_samples": 256, "n_estimators": 100},
-        # lympho
-        ("lympho"): {"contamination": 0.05, "max_samples": 64, "n_estimators": 150},
-        # letter
-        ("letter"): {"contamination": 0.1, "max_samples": 256, "n_estimators": 50},
-        # musk
-        ("musk"): {"contamination": 0.05, "max_samples": 128, "n_estimators": 100},
-        # satellite
-        ("satellite"): {"contamination": 0.15, "max_samples": 64, "n_estimators": 150},
+        # Creditcard
+        ("creditcard"): {
+            "contamination": 0.05,
+            "max_samples": 28,
+            "n_estimators": 100,
+        },
     }
     return data[dataset]

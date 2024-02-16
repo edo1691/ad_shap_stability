@@ -205,11 +205,12 @@ def stability_measure_shap(
 
     # Set a random seed for reproducibility
     np.random.seed(331)
-    ntr, _ = Xtr.shape
-    nte, ft_col = Xte.shape
+    ntr, ft_col_tr = Xtr.shape
+    nte, ft_col_te = Xte.shape
 
     # Initialize weights for sampling; by default, uniform weights
     weights = np.ones(ntr) * (1 / ntr)
+    weights_ft = np.ones(ft_col_tr) * (1 / ft_col_tr)
     if not unif:
         # If biased sampling, use KMeans clustering to determine weights
         cluster_labels = KMeans(n_clusters=10, random_state=331).fit(Xtr).labels_ + 1
@@ -219,7 +220,7 @@ def stability_measure_shap(
         psi = max(0.51, 1 - (gamma + 0.05))
 
     # Initialize an array to store the rankings of features for each test instance across iterations
-    point_rankings = np.zeros((nte, ft_col, iterations), dtype=float)
+    point_rankings = np.zeros((nte, ft_col_te, iterations), dtype=float)
 
     # Loop over iterations to subsample, fit model, and compute SHAP values
     for i in range(iterations):
@@ -244,7 +245,7 @@ def stability_measure_shap(
                 point_rankings[j, si, i] = ii + 1
 
     # Normalize rankings
-    point_rankings /= nte
+    point_rankings /= ft_col_te
 
     # Select beta distribution parameters based on the chosen beta_flavor
     if beta_flavor == 1:
@@ -289,14 +290,14 @@ def stability_measure_shap(
         raise ValueError("Invalid beta_flavor choice. Please select 1 or 2.")
 
     # compute the stability score for multiple iterations
-    random_stdev = np.sqrt((nte + 1) * (nte - 1) / (12 * nte**2))
+    random_stdev = np.sqrt((ft_col_te + 1) * (ft_col_te - 1) / (12 * ft_col_te**2))
 
     # Compute stability scores using the beta distribution and rankings
     stability_scores = []
     for j in range(nte):
         for i in range(2 if intermediate_scores else iterations, iterations + 1):
-            point_stabilities = np.zeros(ft_col, dtype=float)
-            for ii in range(ft_col):
+            point_stabilities = np.zeros(ft_col_te, dtype=float)
+            for ii in range(ft_col_te):
                 p_min, p_max = np.min(point_rankings[j, ii, :i]), np.max(point_rankings[j, ii, :i])
                 p_std = np.std(point_rankings[j, ii, :i])
                 p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
