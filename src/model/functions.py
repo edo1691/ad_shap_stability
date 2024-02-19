@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.ensemble import IsolationForest
 from src.metric.functions import metrics_iforest
+from src.utils.functions import generate_estimators_max_features
 
 
 def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n_feat_estimators=None,
@@ -85,7 +86,9 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
                 print(f'    Number of featured: {len(feat_selected)}')
                 train_data = X[feat_selected]
                 feat_estim = len(train_data.columns)
-                n_feat_estimators = [int(feat_estim)]
+                # n_feat_estimators = [int(feat_estim)]
+                divisions = 5  # For 25%, 50%, 75%, 100%
+                n_feat_estimators = generate_estimators_max_features(feat_estim, divisions)
                 train_data['y'] = y  # Add the target variable 'y' back to the training data
 
                 # Iterate over the number of feat parameter

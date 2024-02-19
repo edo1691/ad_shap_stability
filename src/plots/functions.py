@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 
 
-def plot_3d_surface(df, x_label, y_label, z_label, cmap='inferno', y_step=10,
-                    opt_x=None, opt_y=None, opt_z=None, opt_color='red'):
+def plot_3d_surface(df, x_label, y_label, z_label, cmap='inferno', x_step=10, y_step=10,
+                    opt_x=None, opt_y=None, opt_color='red'):
     """
-    Generates a 3D surface plot for the specified columns in a pandas DataFrame and highlights an optimal point.
+    Generates a 3D surface plot for the specified columns in a pandas DataFrame and draws a vertical line from
+    the intersection of opt_x and opt_y from opt_z=0 to opt_z=1.
 
     Parameters:
     - df: pandas.DataFrame containing the data.
@@ -17,8 +18,7 @@ def plot_3d_surface(df, x_label, y_label, z_label, cmap='inferno', y_step=10,
     - y_step: The increment for ticks on the Y-axis. Defaults to 10.
     - opt_x: The x-coordinate of the optimal point. Optional.
     - opt_y: The y-coordinate of the optimal point. Optional.
-    - opt_z: The z-coordinate of the optimal point. Optional.
-    - opt_color: The color of the optimal point. Defaults to 'red'.
+    - opt_color: The color of the vertical line. Defaults to 'red'.
     """
     # Extracting values from the DataFrame
     x = df[x_label].values
@@ -40,9 +40,10 @@ def plot_3d_surface(df, x_label, y_label, z_label, cmap='inferno', y_step=10,
     # Plotting surface plot
     surf = ax.plot_surface(xi, yi, zi, cmap=cmap, edgecolor='none')
 
-    # Highlighting the optimal point if provided
-    if opt_x is not None and opt_y is not None and opt_z is not None:
-        ax.scatter(opt_x, opt_y, opt_z, color=opt_color, s=50, depthshade=True)
+    # Drawing a vertical line if opt_x and opt_y are provided
+    if opt_x is not None and opt_y is not None:
+        # We use 0 and 1 for opt_z start and end points for simplicity; adjust as needed
+        ax.plot([opt_x, opt_x], [opt_y, opt_y], [z.min(), z.max()], color=opt_color, linewidth=2)
 
     # Adding labels and adjusting axes
     ax.set_xlabel(x_label)
@@ -50,7 +51,7 @@ def plot_3d_surface(df, x_label, y_label, z_label, cmap='inferno', y_step=10,
     ax.set_zlabel(z_label)
     ax.set_xlim([0, x.max()])
     ax.set_ylim([0, y.max()])
-    ax.set_xticks(np.arange(0, x.max(), max(x.max() / 6, 1)))
+    ax.set_xticks(np.arange(0, x.max() + x_step, x_step))
     ax.set_yticks(np.arange(0, y.max() + y_step, y_step))
 
     # Adding a color bar
