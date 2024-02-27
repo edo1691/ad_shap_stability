@@ -138,6 +138,7 @@ def stability_measure_model(
     # compute the stability score for multiple iterations
     random_stdev = np.sqrt((nte + 1) * (nte - 1) / (12 * nte**2))
     stability_scores = []
+    stability_scores_list = []
     lower = 2 if intermediate_scores else iterations
     for i in range(lower, iterations + 1):
         # point stabilities
@@ -155,14 +156,15 @@ def stability_measure_model(
         stability_scores.append(
             np.mean(np.minimum(1, point_stabilities / random_stdev))
         )
+        stability_scores_list.append(np.minimum(1, point_stabilities / random_stdev))
 
     stability_scores = 1.0 - np.array(stability_scores)
     instability_scores = 1.0 - stability_scores
 
     if intermediate_scores:
-        return stability_scores, instability_scores
+        return stability_scores, stability_scores_list
     else:
-        return stability_scores[0], instability_scores[0]
+        return stability_scores[0], stability_scores_list
 
 
 def stability_measure_shap(
@@ -294,6 +296,7 @@ def stability_measure_shap(
 
     # Compute stability scores using the beta distribution and rankings
     stability_scores = []
+    stability_scores_list = []
     for j in range(nte):
         for i in range(2 if intermediate_scores else iterations, iterations + 1):
             point_stabilities = np.zeros(ft_col_te, dtype=float)
@@ -304,10 +307,11 @@ def stability_measure_shap(
                 point_stabilities[ii] = p_area * p_std
             # Compute aggregated stability for the current iteration
             stability_scores.append(np.mean(np.minimum(1, point_stabilities / random_stdev)))
+            stability_scores_list.append(np.minimum(1, point_stabilities / random_stdev))
 
     # Convert stability scores to a final stability measure and calculate instability measure
     stability_scores = 1.0 - np.array(stability_scores)
     instability_scores = 1.0 - stability_scores
 
     # Return stability and instability measures
-    return stability_scores, instability_scores
+    return stability_scores, stability_scores_list

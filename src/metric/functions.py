@@ -49,16 +49,16 @@ def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
         stab_shap_ad = 0
 
     # Stability Index
-    stab_model, _ = stability_measure_model(X_train, X_test, model,
+    stab_model, stab_model_list = stability_measure_model(X_train, X_test, model,
                                             gamma=hyper['contamination'],
                                             unif=True,
                                             iterations=5,
                                             beta_flavor=2)
 
-    stab_shap, _ = stability_measure_shap(X_train, X_test, model,
+    stab_shap, stab_shap_list = stability_measure_shap(X_train, X_test, model,
                                           gamma=0.1,
                                           unif=True,
-                                          iterations=10,
+                                          iterations=5,
                                           beta_flavor=2)
 
-    return report, conf_m, roc_auc, stab_model, stab_shap, stab_shap_ad
+    return report, conf_m, roc_auc, stab_model, stab_model_list, stab_shap_list, stab_shap, stab_shap_ad

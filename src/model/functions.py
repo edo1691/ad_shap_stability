@@ -63,8 +63,8 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
 
     # Initialize lists to store the results of each iteration
     n_tree_list, n_feat_list, n_cont_list, n_iter_list, n_iter_fs_list, n_feats_list, n_roc_auc, model_stab_list, \
-    shap_stab_list, shap_stab_ad_list, auc_precision_recall_median_list, f1_median_list, recall_median_list, \
-    precision_median_list, conf_m_list = ([] for _ in range(15))
+    model_stab_d_list, shap_stab_d_list, shap_stab_list, shap_stab_ad_list, auc_precision_recall_median_list, f1_median_list, recall_median_list, \
+    precision_median_list, conf_m_list = ([] for _ in range(17))
 
     # Get hyperparameters specific to the dataset
     factor = hyper['contamination']
@@ -110,7 +110,7 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
                         train_data['y_scores'] = y_scores
 
                         # Calculate evaluation metrics
-                        report, conf_m, roc_auc, model_stab, shap_stab, shap_stab_ad = metrics_iforest(
+                        report, conf_m, roc_auc, model_stab, stab_model_d_list, stab_shap_d_list, shap_stab, shap_stab_ad = metrics_iforest(
                             train_data.loc[:, ~train_data.columns.isin(excluded_cols)], model, hyper)
 
                         # Store the results of this iteration
@@ -122,6 +122,8 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
                         n_feats_list.append(len(feat_selected))
                         n_roc_auc.append(roc_auc)
                         model_stab_list.append(model_stab)
+                        model_stab_d_list.append(stab_model_d_list)
+                        shap_stab_d_list.append(stab_shap_d_list)
                         shap_stab_list.append(shap_stab)
                         shap_stab_ad_list.append(shap_stab_ad)
                         f1_median_list.append(report['1']['f1-score'])
@@ -139,7 +141,9 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
                         'n_iter_fs': n_iter_fs_list,
                         'roc_auc': n_roc_auc,
                         'model_stab': model_stab_list,
+                        'model_stab_list': model_stab_d_list,
                         'shap_stab': shap_stab_list,
+                        'shap_stab_list': shap_stab_d_list,
                         'shap_stab_ad': shap_stab_ad_list,
                         'f1_median': f1_median_list,
                         'recall': recall_median_list,
