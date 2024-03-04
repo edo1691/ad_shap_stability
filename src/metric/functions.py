@@ -10,8 +10,10 @@ def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
 
     # Split the dataset into training and testing sets while stratifying based on the target variable
     if stratify:
-        data_tr, data_te = train_test_split(data, test_size=0.4,
-                                            random_state=random_state, stratify=data['y'])
+        data_tr, data_te = train_test_split(data,
+                                            test_size=0.4,
+                                            random_state=random_state,
+                                            stratify=data['y'])
 
         X_train = data_tr.drop(excluded, axis=1)
         X_test = data_te.drop(excluded, axis=1)

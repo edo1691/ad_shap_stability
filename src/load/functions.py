@@ -1,6 +1,5 @@
 import numpy as np
 import os
-import time
 from scipy.io import loadmat
 import pandas as pd
 import scipy.io
@@ -31,6 +30,10 @@ def get_fs_dataset(dataset_id, path):
         df.rename(columns={'Class': 'y'}, inplace=True)
         df.drop(['Time', 'Amount'], axis=1, inplace=True)
 
+    if dataset_id == "allianz":
+        data_root = os.path.join(path, "inputs", dataset_id + ".parquet")
+        df = pd.read_parquet(data_root)
+
     return df
 
 
@@ -46,6 +49,12 @@ def fs_datasets_hyperparams(dataset):
         ("creditcard"): {
             "contamination": 0.05,
             "max_samples": 28,
+            "n_estimators": 100,
+        },
+        # Creditcard
+        ("allianz"): {
+            "contamination": 0.1,
+            "max_samples": 256,
             "n_estimators": 100,
         },
     }
