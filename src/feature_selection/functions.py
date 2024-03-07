@@ -43,9 +43,17 @@ def fs_iforest_with_shap(df, contamination_percentage=None, excluded_cols=None, 
     else:
         excluded_cols_all = ['y', 'y_pred', 'prediction', 'y_scores'] + excluded_cols
 
-    # Prepare the feature matrix X and target vector y
-    X = np.array(df.loc[:, ~df.columns.isin(excluded_cols_all)])
-    y = np.array(df['y'])
+    if 'y' in df.columns:
+        # Prepare the feature matrix X and target vector y
+        X = np.array(df.loc[:, ~df.columns.isin(excluded_cols_all)])
+        y = np.array(df['y'])
+
+    else:
+        # Prepare the feature matrix X and target vector y
+        df['y'] = 1
+        X = np.array(df.loc[:, ~df.columns.isin(excluded_cols_all)])
+        y = np.array(df['y'])
+
     feature_names = df.loc[:, ~df.columns.isin(excluded_cols_all)].columns.to_numpy()
 
     # Assuming `shap_ranks` is a custom function that uses SHAP values to rank features

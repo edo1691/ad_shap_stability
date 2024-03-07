@@ -160,7 +160,7 @@ def stability_measure_model(
 
     stability_scores = 1.0 - np.array(stability_scores)
     instability_scores = 1.0 - stability_scores
-    stability_scores_list = 1 - stability_scores_list
+    stability_scores_list = 1.0 - np.array(stability_scores_list)
 
     if intermediate_scores:
         return stability_scores, stability_scores_list
@@ -313,7 +313,7 @@ def stability_measure_shap(
     # Convert stability scores to a final stability measure and calculate instability measure
     stability_scores = 1.0 - np.array(stability_scores)
     instability_scores = 1.0 - stability_scores
-    stability_scores_list = 1 - stability_scores_list
+    stability_scores_list = 1.0 - np.array(stability_scores_list)
 
     # Return stability and instability measures
     return stability_scores, stability_scores_list

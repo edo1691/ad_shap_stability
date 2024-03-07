@@ -54,9 +54,16 @@ def train_and_evaluate_iforest(train_data, dataset_id, hyper=None, fi_df=None, n
     else:
         feat_list = list(fi_df.feat_selected)
 
-    # Prepare the feature matrix X and target vector y
-    X = train_data.loc[:, ~train_data.columns.isin(excluded_cols_all)]
-    y = train_data['y']
+    if 'y' in train_data.columns:
+        # Prepare the feature matrix X and target vector y
+        X = train_data.loc[:, ~train_data.columns.isin(excluded_cols_all)]
+        y = train_data['y']
+
+    else:
+        # Prepare the feature matrix X and target vector y
+        train_data['y'] = 1
+        X = train_data.loc[:, ~train_data.columns.isin(excluded_cols_all)]
+        y = train_data['y']
 
     # Convert dataset ID to lowercase for consistent handling
     dataset_id = dataset_id.lower()
