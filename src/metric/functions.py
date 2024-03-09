@@ -34,7 +34,7 @@ def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
         roc_auc = metrics.auc(fpr, tpr)
 
         stab_shap_ad, _ = stability_measure_shap(X_train, X_test_ad, model,
-                                                 gamma=0.1,
+                                                 gamma=0.5,
                                                  unif=True,
                                                  iterations=10,
                                                  beta_flavor=2)
@@ -58,9 +58,9 @@ def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
                                             beta_flavor=2)
 
     stab_shap, stab_shap_list = stability_measure_shap(X_train, X_test, model,
-                                          gamma=0.1,
+                                          gamma=0.5,
                                           unif=True,
-                                          iterations=5,
+                                          iterations=10,
                                           beta_flavor=2)
 
     return report, conf_m, roc_auc, stab_model, stab_model_list, stab_shap_list, stab_shap, stab_shap_ad

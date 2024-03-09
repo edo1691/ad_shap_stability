@@ -241,6 +241,7 @@ def stability_measure_shap(
         # Fit the model on the subsample and predict on the test set
         model.fit(Xs)
         shap_values = shap.TreeExplainer(model).shap_values(Xte)  # Compute SHAP values
+        # shap_values = abs(shap_values)
 
         # Rank features for each test instance based on their SHAP values
         for j in range(nte):
