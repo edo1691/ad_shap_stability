@@ -1,60 +1,198 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
-def plot_3d_surface(df, x_label, y_label, z_label, cmap='inferno', x_step=10, y_step=10,
-                    opt_x=None, opt_y=None, opt_color='red'):
+def plot_3d_surface(df, x_label, y_label, z_label, ax, fontsize_title=12, fontsize_axes=8, cmap='inferno', x_step=10, y_step=10,
+                    opt_x=None, opt_y=None, opt_color='red', title=''):
     """
-    Generates a 3D surface plot for the specified columns in a pandas DataFrame and draws a vertical line from
-    the intersection of opt_x and opt_y from opt_z=0 to opt_z=1.
+    Generates a 3D surface plot for the specified columns in a pandas DataFrame on a given Axes object,
+    ensuring both X and Y axes start from the minimum to the maximum values.
 
     Parameters:
     - df: pandas.DataFrame containing the data.
     - x_label: The name of the column to be used as the X-axis.
     - y_label: The name of the column to be used as the Y-axis.
     - z_label: The name of the column to be used as the Z-axis.
+    - ax: The Axes object on which to draw the plot.
     - cmap: The colormap for the surface. Defaults to 'inferno'.
+    - x_step: The increment for ticks on the X-axis. Defaults to 10.
     - y_step: The increment for ticks on the Y-axis. Defaults to 10.
     - opt_x: The x-coordinate of the optimal point. Optional.
     - opt_y: The y-coordinate of the optimal point. Optional.
     - opt_color: The color of the vertical line. Defaults to 'red'.
     """
-    # Extracting values from the DataFrame
     x = df[x_label].values
     y = df[y_label].values
     z = df[z_label].values
 
-    # Creating grid data, starting from 0 for both x and y
-    xi = np.linspace(0, x.max(), 100)
-    yi = np.linspace(0, y.max(), 100)
+    xi = np.linspace(x.min(), x.max(), 100)
+    yi = np.linspace(y.min(), y.max(), 100)
     xi, yi = np.meshgrid(xi, yi)
-
-    # Interpolating z values on the grid
     zi = griddata((x, y), z, (xi, yi), method='linear')
 
-    # Creating figure
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Plotting surface plot
     surf = ax.plot_surface(xi, yi, zi, cmap=cmap, edgecolor='none')
 
-    # Drawing a vertical line if opt_x and opt_y are provided
     if opt_x is not None and opt_y is not None:
-        # We use 0 and 1 for opt_z start and end points for simplicity; adjust as needed
-        ax.plot([opt_x, opt_x], [opt_y, opt_y], [z.min(), z.max()], color=opt_color, linewidth=2)
+        ax.plot([opt_x, opt_x], [opt_y, opt_y], [0, z.max()], color=opt_color, linewidth=2)
 
-    # Adding labels and adjusting axes
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_zlabel(z_label)
-    ax.set_xlim([0, x.max()])
-    ax.set_ylim([0, y.max()])
+
+    # Set the title for the plot
+    ax.set_title(title, fontsize=fontsize_title)  # You can adjust the font size as needed
+    ax.set_ylabel('Features selected', fontsize=fontsize_title)
+    ax.set_xlabel('Number of estimators', fontsize=fontsize_title)
+    ax.set_zlabel(f'{z_label}', fontsize=fontsize_title)
+
+    # Explicitly setting the limits to ensure axes start from their minimum to maximum values
+    ax.set_xlim([x.min(), x.max()])
+    ax.set_ylim([y.min(), y.max()])
+
+    # Setting the ticks for X and Y axes
     ax.set_xticks(np.arange(0, x.max() + x_step, x_step))
     ax.set_yticks(np.arange(0, y.max() + y_step, y_step))
 
-    # Adding a color bar
-    cbar = fig.colorbar(surf, shrink=0.5, aspect=5, pad=0.1)
+    ax.tick_params(axis='x', labelsize=fontsize_axes)
+    ax.tick_params(axis='y', labelsize=fontsize_axes)
+    ax.tick_params(axis='z', labelsize=fontsize_axes)
 
+    # Optional: Invert Y axis if needed
+    # ax.invert_yaxis()
+
+    # Optional: Invert X axis if needed
+    ax.invert_xaxis()
+
+
+def plot_2d_surface(df, ax, fontsize_title=8, fontsize_axes=8, save_path=None):
+    """
+    Plots precision and stability index against number of estimators for different n_feats values side by side.
+
+    Parameters:
+    - df: DataFrame containing the columns 'n_estimators', 'n_feats', 'precision', and 'stability index'.
+    """
+
+    # Plot Precision
+    for n_feats in df['n_feats'].unique():
+        subset = df[df['n_feats'] == n_feats]
+        ax[0].plot(subset['n_estimators'], subset['precision'], label=f'n_feats={n_feats}')
+    ax[0].set_xlabel('Number of estimators', fontsize=fontsize_axes)
+    ax[0].set_ylabel('Precision', fontsize=fontsize_axes)
+    ax[0].set_title('Precision by Number of Estimators', fontsize=fontsize_title)
+    ax[0].tick_params(axis='x', labelsize=fontsize_axes)
+    ax[0].tick_params(axis='y', labelsize=fontsize_axes)
+    ax[0].legend(title='# Feature selected', title_fontsize=fontsize_axes, fontsize=fontsize_axes-2, loc='lower right', ncol=3)
+
+    # Plot Stability Index
+    for n_feats in df['n_feats'].unique():
+        subset = df[df['n_feats'] == n_feats]
+        ax[1].plot(subset['n_estimators'], subset['stability index'], label=f'n_feats={n_feats}')
+    ax[1].set_xlabel('Number of estimators', fontsize=fontsize_axes)
+    ax[1].set_ylabel('Stability Index', fontsize=fontsize_axes)
+    ax[1].set_title('Stability Index by Number of Estimators', fontsize=fontsize_title)
+    ax[1].tick_params(axis='x', labelsize=fontsize_axes)
+    ax[1].tick_params(axis='y', labelsize=fontsize_axes)
+    ax[1].legend(title='# Feature selected', title_fontsize=fontsize_axes, fontsize=fontsize_axes-2, loc='lower right', ncol=3)
+
+    plt.tight_layout()  # Adjust layout to prevent overlap
+
+    # Optionally save the figure if a path is provided
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+
+    plt.show()
+
+
+def boxplot_stability(df0, df1, ax, fontsize_title=8, fontsize_axes=8, color_without_fs='steelblue', color_with_fs='skyblue', title='', save_path=None):
+    """
+    Generates a 2x1 grid of plots for comparing stability metrics between dataframes without and with feature selection.
+
+    Parameters:
+    - df0: pandas.DataFrame without feature selection.
+    - df1: pandas.DataFrame with feature selection.
+    - ax: The Axes object or array of Axes objects on which to draw the plots.
+    - fontsize: Font size for plot text elements. Defaults to 8.
+    - color_without_fs: Color for the boxplot without feature selection. Defaults to 'steelblue'.
+    - color_with_fs: Color for the boxplot with feature selection. Defaults to 'skyblue'.
+    - title: Title for the entire figure. Optional.
+    - save_path: Path where to save the figure. If None, the figure is not saved. Optional.
+    """
+
+    # Plot 1: SHAP Stability vs Number of Estimators (Without FS)
+    sns.boxplot(data=df0, x='n_estimators', y='shap_stab', color=color_without_fs, ax=ax[0])
+    ax[0].set_title('Without Feature Selection', fontsize=fontsize_title)
+    ax[0].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
+    ax[0].set_ylabel('Stability', fontsize=fontsize_axes)
+    ax[0].tick_params(axis='x', labelsize=fontsize_axes)
+    ax[0].tick_params(axis='y', labelsize=fontsize_axes)
+
+    # Plot 2: SHAP Stability vs Number of Estimators (With FS)
+    sns.boxplot(data=df1, x='n_estimators', y='shap_stab', color=color_with_fs, ax=ax[1])
+    ax[1].set_title('With Feature Selection', fontsize=fontsize_title)
+    ax[1].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
+    ax[1].set_ylabel('Stability', fontsize=fontsize_axes)
+    ax[1].tick_params(axis='x', labelsize=fontsize_axes)
+    ax[1].tick_params(axis='y', labelsize=fontsize_axes)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    # Optionally save the figure if a path is provided
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+
+    # Show the plots
+    plt.show()
+
+
+def lineplot_stability(dataframes, ax, fontsize_title=12, fontsize_axes=8, colors=None, labels=None, save_path=None):
+    """
+    Generates line plots for comparing stability metrics across different configurations.
+
+    Parameters:
+    - dataframes: A list of pandas.DataFrame objects to plot. Each DataFrame represents a different scenario.
+    - ax: Array of Axes objects on which to draw the plots. Should be of length 2 for this function.
+    - fontsize: Font size for plot text elements. Defaults to 12.
+    - colors: A list of colors for the plots. Length should match the number of dataframes.
+    - labels: A list of labels for the legend, corresponding to each dataframe.
+    - save_path: Path where to save the figure. If None, the figure is not saved. Optional.
+    """
+    # Set default colors and labels if none provided
+    if colors is None:
+        colors = ['steelblue', 'skyblue', 'green', 'orange', 'yellow', 'purple']
+    if labels is None:
+        labels = ['Without FS', 'With FS-100%', 'With FS-80%', 'With FS-60%', 'With FS-40%', 'With FS-20%']
+
+    # Mean SHAP Stability vs Number of Estimators and Max features selected (AUPRC)
+    for df, color, label in zip(dataframes, colors, labels):
+        sns.pointplot(data=df, x='n_estimators', y='roc_auc', color=color, markers='', linestyles='--', ci=None,
+                      ax=ax[0], label=label)
+    ax[0].set_title('AUPRC vs Number of Estimators', fontsize=fontsize_title)
+    ax[0].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
+    ax[0].set_ylabel('ROC', fontsize=fontsize_axes)
+    ax[0].legend(title='Criteria', fontsize=fontsize_axes, loc='lower right', ncol=3)
+    ax[0].tick_params(axis='x', labelsize=fontsize_axes)
+    ax[0].tick_params(axis='y', labelsize=fontsize_axes)
+
+    # Mean SHAP Stability vs Number of Estimators
+    for df, color, label in zip(dataframes, colors, labels):
+        sns.pointplot(data=df, x='n_estimators', y='stability index', color=color, markers='', linestyles='--', ci=None,
+                      ax=ax[1], label=label)
+    ax[1].set_title('Mean Stability vs Number of Estimators', fontsize=fontsize_title)
+    ax[1].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
+    ax[1].set_ylabel('Mean Stability', fontsize=fontsize_axes)
+    ax[1].legend(title='Criteria', fontsize=fontsize_axes, loc='lower right', ncol=3)
+    ax[1].tick_params(axis='x', labelsize=fontsize_axes)
+    ax[1].tick_params(axis='y', labelsize=fontsize_axes)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    # Optionally save the figure if a path is provided
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+
+    # Show the plots
     plt.show()
