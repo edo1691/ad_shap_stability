@@ -6,7 +6,7 @@ import scipy.io
 
 
 def get_fs_dataset(dataset_id, path):
-    if dataset_id == "arrhythmia" or dataset_id == "cardiotocography":
+    if dataset_id == "arrhythmia":
         data_root = os.path.join(path, "inputs", dataset_id + ".mat")
         mat = scipy.io.loadmat(data_root)
         mat = {k: v for k, v in mat.items() if k[0] != "_"}
@@ -29,6 +29,9 @@ def get_fs_dataset(dataset_id, path):
         df = pd.read_csv(data_root)
         df.rename(columns={'Class': 'y'}, inplace=True)
         df.drop(['Time', 'Amount'], axis=1, inplace=True)
+
+    if dataset_id == "bank":
+        data_root = os.path.join(path, "inputs", dataset_id + ".arff")
 
     if dataset_id == "allianz":
         data_root = os.path.join(path, "inputs", dataset_id + ".parquet")

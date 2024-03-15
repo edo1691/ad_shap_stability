@@ -13,5 +13,6 @@ sweetviz==2.1.4
 openai==0.28.1
 cython==3.0.5
 seaborn==0.13.0
+liac-arff
 black
 ipympl
