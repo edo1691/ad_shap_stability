@@ -7,7 +7,7 @@ import shap  # Assuming a function `shap_ranks` exists or is defined elsewhere t
 
 
 def fs_iforest_with_shap(df, contamination_percentage=None, excluded_cols=None, n_trees=100, max_samples=256,
-                         n_iter_fs=5):
+                         n_iter_fs=1):
     """
     Performs feature selection using an Isolation Forest model and SHAP values to rank features based on their
     importance in predicting anomalies. It iteratively evaluates the importance of features using SHAP values and
@@ -57,7 +57,6 @@ def fs_iforest_with_shap(df, contamination_percentage=None, excluded_cols=None, 
     feature_names = df.loc[:, ~df.columns.isin(excluded_cols_all)].columns.to_numpy()
 
     # Assuming `shap_ranks` is a custom function that uses SHAP values to rank features
-    # This function needs to be defined elsewhere in the code
     sorted_idx, fi_shap, avg_f1_ranking = shap_ranks(X, y, feature_names, n_trees=n_trees, max_samples=max_samples,
                                                      n_iter=n_iter_fs)
 
