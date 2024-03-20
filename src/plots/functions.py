@@ -5,7 +5,7 @@ import seaborn as sns
 
 
 def plot_3d_surface(df, x_label, y_label, z_label, ax, fontsize_title=12, fontsize_axes=8, cmap='inferno', x_step=10, y_step=10,
-                    opt_x=None, opt_y=None, opt_color='red', title=''):
+                    opt_x=None, opt_y=None, opt_color='red', title='', alpha=0.5, edgecolor='0.5'):
     """
     Generates a 3D surface plot for the specified columns in a pandas DataFrame on a given Axes object,
     ensuring both X and Y axes start from the minimum to the maximum values.
@@ -32,20 +32,26 @@ def plot_3d_surface(df, x_label, y_label, z_label, ax, fontsize_title=12, fontsi
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z, (xi, yi), method='linear')
 
-    surf = ax.plot_surface(xi, yi, zi, cmap=cmap, edgecolor='none')
+    surf = ax.plot_surface(xi, yi, zi, cmap=cmap, edgecolor=edgecolor, alpha=alpha)
 
     if opt_x is not None and opt_y is not None:
         ax.plot([opt_x, opt_x], [opt_y, opt_y], [0, z.max()], color=opt_color, linewidth=2)
+
+    # Set grid line colors with transparency
+    gridline_color = (0.5, 0.5, 0.5, 0.5)  # RGBA tuple for semi-transparent grey
+    ax.xaxis._axinfo["grid"].update(color=gridline_color)
+    ax.yaxis._axinfo["grid"].update(color=gridline_color)
+    ax.zaxis._axinfo["grid"].update(color=gridline_color)
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_zlabel(z_label)
 
     # Set the title for the plot
-    ax.set_title(title, fontsize=fontsize_title)  # You can adjust the font size as needed
-    ax.set_ylabel('Features selected', fontsize=fontsize_title)
-    ax.set_xlabel('Number of estimators', fontsize=fontsize_title)
-    ax.set_zlabel(f'{z_label}', fontsize=fontsize_title)
+    ax.set_xlabel('Number of estimators', fontsize=fontsize_axes)
+    ax.set_ylabel('Features selected', fontsize=fontsize_axes)
+    ax.set_zlabel(f'{z_label}', fontsize=fontsize_axes)
+    ax.set_title(title, fontsize=fontsize_title)
 
     # Explicitly setting the limits to ensure axes start from their minimum to maximum values
     ax.set_xlim([x.min(), x.max()])
@@ -59,50 +65,35 @@ def plot_3d_surface(df, x_label, y_label, z_label, ax, fontsize_title=12, fontsi
     ax.tick_params(axis='y', labelsize=fontsize_axes)
     ax.tick_params(axis='z', labelsize=fontsize_axes)
 
-    # Optional: Invert Y axis if needed
-    # ax.invert_yaxis()
-
     # Optional: Invert X axis if needed
     ax.invert_xaxis()
 
 
-def plot_2d_surface(df, ax, fontsize_title=8, fontsize_axes=8, save_path=None):
+def plot_2d_surface(df, ax, fontsize_title=8, fontsize_axes=8, feat='precision'):
     """
     Plots precision and stability index against number of estimators for different n_feats values side by side.
 
     Parameters:
     - df: DataFrame containing the columns 'n_estimators', 'n_feats', 'precision', and 'stability index'.
     """
+    # Assuming the function is modified to plot only one of Precision or Stability Index at a time
+    # If you need to plot both in different axes, you'd call this function twice with different `ax` each time
 
-    # Plot Precision
+    # Example for plotting Precision
     for n_feats in df['n_feats'].unique():
         subset = df[df['n_feats'] == n_feats]
-        ax[0].plot(subset['n_estimators'], subset['precision'], label=f'n_feats={n_feats}')
-    ax[0].set_xlabel('Number of estimators', fontsize=fontsize_axes)
-    ax[0].set_ylabel('Precision', fontsize=fontsize_axes)
-    ax[0].set_title('Precision by Number of Estimators', fontsize=fontsize_title)
-    ax[0].tick_params(axis='x', labelsize=fontsize_axes)
-    ax[0].tick_params(axis='y', labelsize=fontsize_axes)
-    ax[0].legend(title='# Feature selected', title_fontsize=fontsize_axes, fontsize=fontsize_axes-2, loc='lower right', ncol=3)
+        ax.plot(subset['n_estimators'], subset[feat], label=f'n_feats={n_feats}')  # Use ax directly
 
-    # Plot Stability Index
-    for n_feats in df['n_feats'].unique():
-        subset = df[df['n_feats'] == n_feats]
-        ax[1].plot(subset['n_estimators'], subset['stability index'], label=f'n_feats={n_feats}')
-    ax[1].set_xlabel('Number of estimators', fontsize=fontsize_axes)
-    ax[1].set_ylabel('Stability Index', fontsize=fontsize_axes)
-    ax[1].set_title('Stability Index by Number of Estimators', fontsize=fontsize_title)
-    ax[1].tick_params(axis='x', labelsize=fontsize_axes)
-    ax[1].tick_params(axis='y', labelsize=fontsize_axes)
-    ax[1].legend(title='# Feature selected', title_fontsize=fontsize_axes, fontsize=fontsize_axes-2, loc='lower right', ncol=3)
+    y_ticks = [i * 0.2 for i in range(0, 6)]  # Creates a list [0, 0.1, 0.2, ..., 1.0]
 
-    plt.tight_layout()  # Adjust layout to prevent overlap
-
-    # Optionally save the figure if a path is provided
-    if save_path:
-        plt.savefig(save_path, bbox_inches='tight')
-
-    plt.show()
+    ax.set_xlabel('number of estimators', fontsize=fontsize_axes)
+    ax.set_ylabel(f'{feat}', fontsize=fontsize_axes)
+    ax.set_title(f'{feat} by number of estimators', fontsize=fontsize_title)
+    ax.tick_params(axis='x', labelsize=fontsize_axes)
+    ax.tick_params(axis='y', labelsize=fontsize_axes)
+    ax.set_yticks(y_ticks)  # Set specific y-axis ticks
+    ax.legend(title='# feature selected', title_fontsize=fontsize_axes, fontsize=fontsize_axes - 2, loc='lower right',
+              ncol=3)
 
 
 def boxplot_stability(df0, df1, ax, fontsize_title=8, fontsize_axes=8, color_without_fs='steelblue', color_with_fs='skyblue', title='', save_path=None):

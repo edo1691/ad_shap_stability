@@ -4,10 +4,11 @@ from scipy.io import loadmat
 import pandas as pd
 import scipy.io
 from sklearn.preprocessing import OrdinalEncoder
+from scipy.io import arff
 
 
 def get_fs_dataset(dataset_id, path):
-    if dataset_id == "arrhythmia":
+    if (dataset_id == "arrhythmia") | (dataset_id == "cardio") | (dataset_id == "musk"):
         data_root = os.path.join(path, "inputs", dataset_id + ".mat")
         mat = scipy.io.loadmat(data_root)
         mat = {k: v for k, v in mat.items() if k[0] != "_"}
@@ -31,6 +32,24 @@ def get_fs_dataset(dataset_id, path):
         df = pd.read_csv(data_root, on_bad_lines='skip')
         df.rename(columns={'Class': 'y'}, inplace=True)
         df.drop(['Time', 'Amount'], axis=1, inplace=True)
+
+    if dataset_id == "bank":
+        data_root = os.path.join(path, "inputs", dataset_id + ".arff")
+        data, meta = arff.loadarff(data_root)
+        df = pd.DataFrame(data)
+        df = df.applymap(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
+        # Identify object columns
+        object_columns = df.select_dtypes(include=['object']).columns
+        numerical_cols = df.columns.difference(object_columns)
+        # Fill NaN values with 0 for numerical columns
+        df[object_columns] = df[object_columns].fillna('NaN_category')
+        df[numerical_cols] = df[numerical_cols].fillna(0)
+        # Initialize the ordinal encoder
+        encoder = OrdinalEncoder()
+        # Apply ordinal encoding to object columns
+        df[object_columns] = encoder.fit_transform(df[object_columns])
+        # df.rename(columns={'Class': 'y'}, inplace=True)
+        # df.drop(['Time', 'Amount'], axis=1, inplace=True)
 
     if dataset_id == "german_data":
         data_root = os.path.join(path, "inputs", dataset_id + ".csv")
@@ -82,6 +101,21 @@ def fs_datasets_hyperparams(dataset):
     data = {
         # arrhythmia
         ("arrhythmia"): {
+            "contamination": 0.1,
+            "max_samples": 256,
+            "n_estimators": 100,
+        },
+        ("cardio"): {
+            "contamination": 0.1,
+            "max_samples": 256,
+            "n_estimators": 100,
+        },
+        ("musk"): {
+            "contamination": 0.1,
+            "max_samples": 256,
+            "n_estimators": 100,
+        },
+        ("bank"): {
             "contamination": 0.1,
             "max_samples": 256,
             "n_estimators": 100,
