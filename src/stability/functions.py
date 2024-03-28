@@ -169,7 +169,7 @@ def stability_measure_model(
 
 
 def stability_measure_shap(
-    Xtr, Xte, model, gamma, unif=True, iterations=500, psi=0.8,
+    Xtr, Xte, model, gamma=0.5, unif=True, iterations=500, psi=0.8,
     beta_flavor=2, subset_low=0.25, subset_high=0.75, intermediate_scores=False,
 ):
     """
@@ -318,3 +318,138 @@ def stability_measure_shap(
 
     # Return stability and instability measures
     return stability_scores, stability_scores_list
+
+
+def normalize_rankings(rankings):
+    """
+    Normalizes the rankings using min-max normalization.
+
+    Parameters
+    ----------
+    rankings : np.array
+        Array of rankings.
+
+    Returns
+    -------
+    np.array
+        Normalized rankings.
+    """
+    min_rank = rankings.min(axis=2, keepdims=True)
+    max_rank = rankings.max(axis=2, keepdims=True)
+    # Prevent division by zero
+    normalized_rankings = np.where(max_rank > min_rank, (rankings - min_rank) / (max_rank - min_rank), 0)
+    return normalized_rankings
+
+
+def calculate_beta_parameters(psi, gamma, beta_flavor):
+    """
+    Calculates the parameters for the beta distribution.
+
+    Parameters
+    ----------
+    psi : float
+        Controls the shape of the beta distribution.
+    gamma : float
+        Contamination factor.
+    beta_flavor : int
+        Method for determining beta distribution parameters.
+
+    Returns
+    -------
+    tuple
+        Alpha and beta parameters for the beta distribution.
+    """
+    if beta_flavor == 1:
+        # Method 1: Parameters based on ensuring equal mass in specified intervals
+        # Calculate parameters alpha and beta for the beta distribution
+        # The area of the Beta distribution is the same in the intervals [0, psi] and [psi, 1]
+        beta_param = float(
+            (1 / (psi + gamma - 1))
+            * (2 * gamma - 1 - gamma / 3 + psi * ((3 - 4 * gamma) / 3))
+        )
+        alpha_param = float(
+            beta_param * ((1 - gamma) / gamma) + (2 * gamma - 1) / gamma
+        )
+    elif beta_flavor == 2:
+        # Method 2: Parameters based on a portion of the distribution's mass within a specific range
+        # Use optimization to find parameters that satisfy the condition
+        # the width of the beta distribution is set such that psi percent of the mass of the distribution falls in the region [1 - 2 * gamma , 1]
+
+        # optimization function
+        def f(p):
+            return ((1.0 - psi) - beta.cdf(1.0 - 2 * gamma, p[0], p[1])) ** 2
+
+        # bounds
+        bounds = Bounds([1.0, 1.0], [np.inf, np.inf])
+        # linear constraint
+        linear_constraint = LinearConstraint(
+            [[gamma, gamma - 1.0]], [2 * gamma - 1.0], [2 * gamma - 1.0]
+        )
+        # optimize
+        p0 = np.array([1.0, 1.0])
+        res = minimize(
+            f,
+            p0,
+            method="trust-constr",
+            constraints=[linear_constraint],
+            options={"verbose": 0},
+            bounds=bounds,
+        )
+        alpha_param = res.x[0]
+        beta_param = res.x[1]
+    else:
+        raise ValueError("Invalid beta_flavor choice. Please select 1 or 2.")
+    return alpha_param, beta_param
+
+
+def local_stability_measure(Xtr, Xte, model, gamma=0.5, iterations=500, psi=0.8, beta_flavor=2, subset_low=0.25,
+                            subset_high=0.75):
+    """
+    Your existing function documentation here.
+    """
+    np.random.seed(331)
+    ntr, ft_col_tr = Xtr.shape
+    nte, ft_col_te = Xte.shape
+
+    # Adjust psi if necessary, this part remains the same
+    if psi == 0:
+        psi = max(0.51, 1 - (gamma + 0.05))
+
+    point_rankings = np.zeros((nte, ft_col_te, iterations), dtype=float)
+    for i in range(iterations):
+        subsample_size = np.random.randint(int(ntr * subset_low), int(ntr * subset_high))
+        sample_indices = np.random.choice(ntr, size=subsample_size, replace=False)
+        Xs = Xtr.iloc[sample_indices, :]
+        model.fit(Xs)
+        shap_values = shap.TreeExplainer(model).shap_values(Xte)
+        for j in range(nte):
+            for ii, si in enumerate(np.argsort(shap_values[j, :])[::-1]):
+                point_rankings[j, si, i] = ii + 1
+
+    normalized_point_rankings = normalize_rankings(point_rankings)
+    alpha_param, beta_param = calculate_beta_parameters(psi, gamma, beta_flavor)
+
+    # compute the stability score for multiple iterations
+    random_stdev = np.sqrt((ft_col_te + 1) * (ft_col_te - 1) / (12 * ft_col_te ** 2))
+
+    # Compute stability scores using the beta distribution and rankings
+    stability_scores = []
+    stability_scores_list = []
+    for j in range(nte):
+        for i in range(iterations, iterations + 1):
+            point_stabilities = np.zeros(ft_col_te, dtype=float)
+            for ii in range(ft_col_te):
+                p_min, p_max = np.min(normalized_point_rankings[j, ii, :i]), np.max(
+                    normalized_point_rankings[j, ii, :i])
+                p_std = np.std(normalized_point_rankings[j, ii, :i])
+                p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
+                point_stabilities[ii] = p_area * p_std
+            # Compute aggregated stability for the current iteration
+            stability_scores.append(np.mean(np.minimum(1, point_stabilities / random_stdev)))
+            stability_scores_list.append(np.minimum(1, point_stabilities / random_stdev))
+
+    # Placeholder for stability score computation
+    stability_scores = 1.0 - np.array(stability_scores)
+    instability_scores = 1.0 - stability_scores
+
+    return stability_scores, instability_scores

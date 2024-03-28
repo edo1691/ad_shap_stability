@@ -1,7 +1,7 @@
 from sklearn.metrics import classification_report
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
-from src.stability.functions import stability_measure_model, stability_measure_shap
+from src.stability.functions import stability_measure_model, local_stability_measure
 
 
 def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
@@ -33,9 +33,8 @@ def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
         fpr, tpr, thresholds = metrics.roc_curve(y_test['y'], y_test['y_deci'])
         roc_auc = metrics.auc(fpr, tpr)
 
-        stab_shap_ad, _ = stability_measure_shap(X_train, X_test_ad, model,
+        stab_shap_ad, _ = local_stability_measure(X_train, X_test_ad, model,
                                                  gamma=0.5,
-                                                 unif=True,
                                                  iterations=10,
                                                  beta_flavor=2)
     else:
@@ -57,10 +56,9 @@ def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
                                             iterations=5,
                                             beta_flavor=2)
 
-    stab_shap, stab_shap_list = stability_measure_shap(X_train, X_test, model,
-                                          gamma=0.5,
-                                          unif=True,
-                                          iterations=10,
+    stab_shap, stab_shap_list = local_stability_measure(X_train, X_test, model,
+                                          gamma=0.8,
+                                          iterations=100,
                                           beta_flavor=2)
 
     return report, conf_m, roc_auc, stab_model, stab_model_list, stab_shap_list, stab_shap, stab_shap_ad

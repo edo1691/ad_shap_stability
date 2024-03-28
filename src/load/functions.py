@@ -8,7 +8,7 @@ from scipy.io import arff
 
 
 def get_fs_dataset(dataset_id, path):
-    if (dataset_id == "arrhythmia") | (dataset_id == "cardio") | (dataset_id == "musk"):
+    if (dataset_id == "arrhythmia") | (dataset_id == "cardio") | (dataset_id == "musk") | (dataset_id == "mammography"):
         data_root = os.path.join(path, "inputs", dataset_id + ".mat")
         mat = scipy.io.loadmat(data_root)
         mat = {k: v for k, v in mat.items() if k[0] != "_"}
@@ -101,6 +101,12 @@ def fs_datasets_hyperparams(dataset):
     data = {
         # arrhythmia
         ("arrhythmia"): {
+            "contamination": 0.1,
+            "max_samples": 256,
+            "n_estimators": 100,
+        },
+        # mammography
+        ("mammography"): {
             "contamination": 0.1,
             "max_samples": 256,
             "n_estimators": 100,

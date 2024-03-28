@@ -51,3 +51,37 @@ def prepare_subsets(df, ranks, max_feats):
             subset['shap_stab'] = pd.to_numeric(subset['shap_stab'])
             subsets[key] = subset
     return subsets
+
+
+def adjust_fi(df):
+    """
+    If 'n_feats' == 1 for any row, remove that row and insert a copy of the first row
+    of the dataframe in its position.
+
+    Parameters:
+    - df: The input pandas DataFrame.
+
+    Returns:
+    - A modified DataFrame based on the described conditions.
+    """
+    # Check if there's any row with 'n_feats' == 1
+    if (df['n_feats'] == 1).any():
+        # Find the index of the row where 'n_feats' == 1
+        index_to_remove = df.index[df['n_feats'] == 1].tolist()
+
+        # Assuming there's at least one row to remove and the DataFrame has more than 1 row
+        if index_to_remove and len(df) > 1:
+            for index in index_to_remove:
+                # Remove the row where 'n_feats' == 1
+                df = df.drop(index)
+
+                # Copy the second row
+                row_to_duplicate = df.iloc[0].copy()
+
+                # Insert the copied row at the removed position
+                # Adjust the index if needed to maintain continuity
+                df = pd.concat(
+                    [df.iloc[:index], pd.DataFrame([row_to_duplicate.values], columns=row_to_duplicate.index),
+                     df.iloc[index:]]).reset_index(drop=True)
+
+    return df
