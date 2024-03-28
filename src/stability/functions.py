@@ -5,6 +5,7 @@ import pandas as pd
 import shap
 from sklearn.cluster import KMeans
 import sys
+from joblib import Parallel, delayed
 
 
 def stability_measure_model(
@@ -168,158 +169,6 @@ def stability_measure_model(
         return stability_scores[0], stability_scores_list
 
 
-def stability_measure_shap(
-    Xtr, Xte, model, gamma=0.5, unif=True, iterations=500, psi=0.8,
-    beta_flavor=2, subset_low=0.25, subset_high=0.75, intermediate_scores=False,
-):
-    """
-    Calculates the stability of SHAP (SHapley Additive exPlanations) values across subsamples of the training set.
-
-    Parameters
-    ----------
-    Xtr : np.array
-        Training set, shape (n_samples, n_features).
-    Xte : np.array
-        Test set, shape (m_samples, n_features).
-    model : model object
-        Fitted anomaly detection model.
-    gamma : float
-        Contamination factor, expected proportion of outliers in the data.
-    unif : bool, default True
-        If True, uniform sampling of training data; if False, biased sampling.
-    iterations : int, default 500
-        Number of iterations for subsampling and SHAP value calculation.
-    psi : float, default 0.8
-        Controls the shape of the beta distribution for stability scoring.
-    beta_flavor : int, default 2
-        Selects the method for determining beta distribution parameters.
-    subset_low : float, default 0.25
-        Lower bound for subsample size as a proportion of training data size.
-    subset_high : float, default 0.75
-        Upper bound for subsample size as a proportion of training data size.
-    intermediate_scores : bool, default False
-        If True, computes stability scores for all iterations; otherwise, only final score.
-
-    Returns
-    -------
-    tuple of np.array
-        Stability and instability measures for the test set.
-    """
-
-    # Set a random seed for reproducibility
-    np.random.seed(331)
-    ntr, ft_col_tr = Xtr.shape
-    nte, ft_col_te = Xte.shape
-
-    # Initialize weights for sampling; by default, uniform weights
-    weights = np.ones(ntr) * (1 / ntr)
-    weights_ft = np.ones(ft_col_tr) * (1 / ft_col_tr)
-    if not unif:
-        # If biased sampling, use KMeans clustering to determine weights
-        cluster_labels = KMeans(n_clusters=10, random_state=331).fit(Xtr).labels_ + 1
-
-    # Adjust psi to ensure it's within a valid range
-    if psi == 0:
-        psi = max(0.51, 1 - (gamma + 0.05))
-
-    # Initialize an array to store the rankings of features for each test instance across iterations
-    point_rankings = np.zeros((nte, ft_col_te, iterations), dtype=float)
-
-    # Loop over iterations to subsample, fit model, and compute SHAP values
-    for i in range(iterations):
-        if not unif:
-            # For biased sampling, adjust weights based on cluster labels
-            biased_weights = {w: np.random.randint(1, 100) for w in range(1, 11)}
-            weights = np.array([biased_weights[label] for label in cluster_labels])
-            weights /= weights.sum()  # Normalize weights
-
-        # Randomly select a subsample of the training data
-        subsample_size = np.random.randint(int(ntr * subset_low), int(ntr * subset_high))
-        sample_indices = np.random.choice(np.arange(ntr), size=subsample_size, p=weights, replace=False)
-        Xs = Xtr[sample_indices, :] if not isinstance(Xtr, pd.DataFrame) else Xtr.iloc[sample_indices, :]
-
-        # Fit the model on the subsample and predict on the test set
-        model.fit(Xs)
-        shap_values = shap.TreeExplainer(model).shap_values(Xte)  # Compute SHAP values
-        # shap_values = abs(shap_values)
-
-        # Rank features for each test instance based on their SHAP values
-        for j in range(nte):
-            for ii, si in enumerate(np.argsort(shap_values[j, :])[::-1]):
-                point_rankings[j, si, i] = ii + 1
-
-    # Normalize rankings
-    point_rankings /= ft_col_te
-
-    # Select beta distribution parameters based on the chosen beta_flavor
-    if beta_flavor == 1:
-        # Method 1: Parameters based on ensuring equal mass in specified intervals
-        # Calculate parameters alpha and beta for the beta distribution
-        # The area of the Beta distribution is the same in the intervals [0, psi] and [psi, 1]
-        beta_param = float(
-            (1 / (psi + gamma - 1))
-            * (2 * gamma - 1 - gamma / 3 + psi * ((3 - 4 * gamma) / 3))
-        )
-        alpha_param = float(
-            beta_param * ((1 - gamma) / gamma) + (2 * gamma - 1) / gamma
-        )
-    elif beta_flavor == 2:
-        # Method 2: Parameters based on a portion of the distribution's mass within a specific range
-        # Use optimization to find parameters that satisfy the condition
-        # the width of the beta distribution is set such that psi percent of the mass of the distribution falls in the region [1 - 2 * gamma , 1]
-
-        # optimization function
-        def f(p):
-            return ((1.0 - psi) - beta.cdf(1.0 - 2 * gamma, p[0], p[1])) ** 2
-
-        # bounds
-        bounds = Bounds([1.0, 1.0], [np.inf, np.inf])
-        # linear constraint
-        linear_constraint = LinearConstraint(
-            [[gamma, gamma - 1.0]], [2 * gamma - 1.0], [2 * gamma - 1.0]
-        )
-        # optimize
-        p0 = np.array([1.0, 1.0])
-        res = minimize(
-            f,
-            p0,
-            method="trust-constr",
-            constraints=[linear_constraint],
-            options={"verbose": 0},
-            bounds=bounds,
-        )
-        alpha_param = res.x[0]
-        beta_param = res.x[1]
-    else:
-        raise ValueError("Invalid beta_flavor choice. Please select 1 or 2.")
-
-    # compute the stability score for multiple iterations
-    random_stdev = np.sqrt((ft_col_te + 1) * (ft_col_te - 1) / (12 * ft_col_te**2))
-
-    # Compute stability scores using the beta distribution and rankings
-    stability_scores = []
-    stability_scores_list = []
-    for j in range(nte):
-        for i in range(2 if intermediate_scores else iterations, iterations + 1):
-            point_stabilities = np.zeros(ft_col_te, dtype=float)
-            for ii in range(ft_col_te):
-                p_min, p_max = np.min(point_rankings[j, ii, :i]), np.max(point_rankings[j, ii, :i])
-                p_std = np.std(point_rankings[j, ii, :i])
-                p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
-                point_stabilities[ii] = p_area * p_std
-            # Compute aggregated stability for the current iteration
-            stability_scores.append(np.mean(np.minimum(1, point_stabilities / random_stdev)))
-            stability_scores_list.append(np.minimum(1, point_stabilities / random_stdev))
-
-    # Convert stability scores to a final stability measure and calculate instability measure
-    stability_scores = 1.0 - np.array(stability_scores)
-    instability_scores = 1.0 - stability_scores
-    stability_scores_list = 1.0 - np.array(stability_scores_list)
-
-    # Return stability and instability measures
-    return stability_scores, stability_scores_list
-
-
 def normalize_rankings(rankings):
     """
     Normalizes the rankings using min-max normalization.
@@ -402,54 +251,73 @@ def calculate_beta_parameters(psi, gamma, beta_flavor):
     return alpha_param, beta_param
 
 
-def local_stability_measure(Xtr, Xte, model, gamma=0.5, iterations=500, psi=0.8, beta_flavor=2, subset_low=0.25,
-                            subset_high=0.75):
+def iteration_function(Xtr, Xte, model, sample_indices, nte, ft_col_te):
     """
-    Your existing function documentation here.
+    Performs operations for a single iteration: model fitting and SHAP value computation.
+    """
+    # Select the subsample and
+    # Convert the DataFrame to a more memory-efficient format if not already done
+    Xs = Xtr.iloc[sample_indices, :].astype(np.float32)
+
+    # Fit the model to the subsample
+    # Ensure n_jobs is set to utilize all available cores for parallelization, if not set already
+    if 'n_jobs' not in model.get_params() or model.get_params()['n_jobs'] != -1:
+        model.set_params(n_jobs=-1)
+    model.fit(Xs)
+
+    # Compute SHAP values for the test set
+    shap_values = shap.TreeExplainer(model).shap_values(Xte)
+
+    # Rank features for each test instance based on their SHAP values
+    iteration_rankings = np.zeros((nte, ft_col_te), dtype=float)
+    for j in range(nte):
+        for ii, si in enumerate(np.argsort(shap_values[j, :])[::-1]):
+            iteration_rankings[j, si] = ii + 1
+    return iteration_rankings
+
+
+def local_stability_measure(Xtr, Xte, model, gamma=0.1, iterations=500, psi=0.8, beta_flavor=2,
+                                     subset_low=0.25, subset_high=0.75):
+    """
+    Computes the local stability measure using parallel processing for iterations.
     """
     np.random.seed(331)
-    ntr, ft_col_tr = Xtr.shape
+    ntr, _ = Xtr.shape
     nte, ft_col_te = Xte.shape
 
-    # Adjust psi if necessary, this part remains the same
-    if psi == 0:
-        psi = max(0.51, 1 - (gamma + 0.05))
+    # Generate subsample indices for all iterations in advance
+    subsample_sizes = np.random.randint(int(ntr * subset_low), int(ntr * subset_high), size=iterations)
+    subsample_indices = [np.random.choice(ntr, size=size, replace=False) for size in subsample_sizes]
 
-    point_rankings = np.zeros((nte, ft_col_te, iterations), dtype=float)
-    for i in range(iterations):
-        subsample_size = np.random.randint(int(ntr * subset_low), int(ntr * subset_high))
-        sample_indices = np.random.choice(ntr, size=subsample_size, replace=False)
-        Xs = Xtr.iloc[sample_indices, :]
-        model.fit(Xs)
-        shap_values = shap.TreeExplainer(model).shap_values(Xte)
-        for j in range(nte):
-            for ii, si in enumerate(np.argsort(shap_values[j, :])[::-1]):
-                point_rankings[j, si, i] = ii + 1
+    # Parallelize iterations
+    results = Parallel(n_jobs=-1)(
+        delayed(iteration_function)(Xtr, Xte, model, indices, nte, ft_col_te) for indices in subsample_indices)
 
+    # Convert list of iteration rankings into a single array
+    point_rankings = np.array(results).transpose((1, 2, 0))
+
+    # Normalize rankings
     normalized_point_rankings = normalize_rankings(point_rankings)
+    # Calculate beta distribution parameters
     alpha_param, beta_param = calculate_beta_parameters(psi, gamma, beta_flavor)
 
     # compute the stability score for multiple iterations
     random_stdev = np.sqrt((ft_col_te + 1) * (ft_col_te - 1) / (12 * ft_col_te ** 2))
 
     # Compute stability scores using the beta distribution and rankings
-    stability_scores = []
-    stability_scores_list = []
+    stability_scores = np.zeros(nte)
     for j in range(nte):
-        for i in range(iterations, iterations + 1):
-            point_stabilities = np.zeros(ft_col_te, dtype=float)
-            for ii in range(ft_col_te):
-                p_min, p_max = np.min(normalized_point_rankings[j, ii, :i]), np.max(
-                    normalized_point_rankings[j, ii, :i])
-                p_std = np.std(normalized_point_rankings[j, ii, :i])
-                p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
-                point_stabilities[ii] = p_area * p_std
-            # Compute aggregated stability for the current iteration
-            stability_scores.append(np.mean(np.minimum(1, point_stabilities / random_stdev)))
-            stability_scores_list.append(np.minimum(1, point_stabilities / random_stdev))
+        instance_stabilities = []
+        for ii in range(ft_col_te):
+            p_min, p_max = np.min(normalized_point_rankings[j, ii]), np.max(normalized_point_rankings[j, ii])
+            p_std = np.std(normalized_point_rankings[j, ii])
+            p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
+            instance_stabilities.append(p_area * p_std)
+        # Compute aggregated stability for the current test instance across all features
+        stability_scores[j] = np.mean(np.minimum(1, np.array(instance_stabilities) / random_stdev))
 
-    # Placeholder for stability score computation
-    stability_scores = 1.0 - np.array(stability_scores)
-    instability_scores = 1.0 - stability_scores
+    # Average stability scores over all iterations to get a single measure per instance
+    stability_scores_per_instance = 1.0 - stability_scores
+    instability_scores = 1.0 - stability_scores_per_instance
 
     return stability_scores, instability_scores
