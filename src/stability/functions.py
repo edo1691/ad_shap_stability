@@ -183,8 +183,11 @@ def normalize_rankings(rankings):
     np.array
         Normalized rankings.
     """
-    min_rank = rankings.min(axis=2, keepdims=True)
-    max_rank = rankings.max(axis=2, keepdims=True)
+    # min_rank = rankings.min(axis=2, keepdims=True)
+    # max_rank = rankings.max(axis=2, keepdims=True)
+    # Min & Max over all the dataframe
+    min_rank = rankings.min()
+    max_rank = rankings.max()
     # Prevent division by zero
     normalized_rankings = np.where(max_rank > min_rank, (rankings - min_rank) / (max_rank - min_rank), 0)
     return normalized_rankings
@@ -298,6 +301,7 @@ def local_stability_measure(Xtr, Xte, model, gamma=0.1, iterations=500, psi=0.8,
 
     # Normalize rankings
     normalized_point_rankings = normalize_rankings(point_rankings)
+
     # Calculate beta distribution parameters
     alpha_param, beta_param = calculate_beta_parameters(psi, gamma, beta_flavor)
 
@@ -306,6 +310,7 @@ def local_stability_measure(Xtr, Xte, model, gamma=0.1, iterations=500, psi=0.8,
 
     # Compute stability scores using the beta distribution and rankings
     stability_scores = np.zeros(nte)
+
     for j in range(nte):
         instance_stabilities = []
         for ii in range(ft_col_te):
@@ -321,3 +326,7 @@ def local_stability_measure(Xtr, Xte, model, gamma=0.1, iterations=500, psi=0.8,
     instability_scores = 1.0 - stability_scores_per_instance
 
     return stability_scores, instability_scores
+
+# std_per_instance_and_feature = np.std(normalized_point_rankings, axis=2)
+
+# mean_std_devs_per_instance = np.mean(std_per_instance_and_feature, axis=1)

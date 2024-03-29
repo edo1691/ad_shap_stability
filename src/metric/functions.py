@@ -1,64 +1,58 @@
-from sklearn.metrics import classification_report
-from sklearn import metrics
-from sklearn.model_selection import train_test_split
 from src.stability.functions import stability_measure_model, local_stability_measure
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, roc_auc_score
 
 
-def metrics_iforest(df, model, hyper, stratify=True, random_state=42):
-    data = df.copy()
-    excluded = ['y', 'y_pred', 'prediction', 'y_scores', 'y_deci']
+def metrics_iforest(df, model, stratify=True, random_state=42):
+    excluded_cols = ['y', 'y_pred', 'prediction', 'y_scores', 'y_deci']
+    cols_to_drop = [col for col in excluded_cols if col in df.columns]
+    X = df.drop(columns=cols_to_drop)
+    y = df['y']
 
-    # Split the dataset into training and testing sets while stratifying based on the target variable
+    test_size = 0.4  # Define test size for splitting
+
+    # Stratify split if required
+    stratify_param = y if stratify else None
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state,
+                                                        stratify=stratify_param)
+
     if stratify:
-        data_tr, data_te = train_test_split(data,
-                                            test_size=0.4,
-                                            random_state=random_state,
-                                            stratify=data['y'])
+        # Calculate metrics
+        predictions = df.loc[X_test.index, 'prediction']  # Use prediction column for calculating metrics
+        decision_scores = df.loc[X_test.index, 'y_deci']
 
-        X_train = data_tr.drop(excluded, axis=1)
-        X_test = data_te.drop(excluded, axis=1)
-        y_train = data_tr[excluded]
-        y_test = data_te[excluded]
+        report = classification_report(y_test, predictions, target_names=['0', '1'], output_dict=True)
+        roc_auc = roc_auc_score(y_test, decision_scores)
 
-        data_te_ad = data_te[data_te.y == 1]
-        X_test_ad = data_te_ad.drop(excluded, axis=1)
-
-        # Iforest report: precision, recall and f1_score
-        report = classification_report(y_test['y'], y_test['prediction'], target_names=['0', '1'], output_dict=True)
-
-        # Confusion matrix
-        # conf_m = confusion_matrix(data['y'], data['prediction'])
-        conf_m = 1
-
-        fpr, tpr, thresholds = metrics.roc_curve(y_test['y'], y_test['y_deci'])
-        roc_auc = metrics.auc(fpr, tpr)
-
-        stab_shap_ad, _ = local_stability_measure(X_train, X_test_ad, model,
-                                                 gamma=0.1,
-                                                 iterations=10,
-                                                 beta_flavor=2)
+        # Stability Index
+        stab_model, stab_model_list = stability_measure_model(X_train, X_test, model,
+                                                              gamma=0.1,
+                                                              unif=True,
+                                                              iterations=1,
+                                                              beta_flavor=2)
+        # Local Interpretability Stability Index
+        stab_shap, stab_shap_list = local_stability_measure(X_train, X_test, model,
+                                                            gamma=0.5,
+                                                            iterations=25,
+                                                            beta_flavor=2)
     else:
-        data_tr, data_te = train_test_split(data, test_size=0.4, random_state=random_state)
-
-        X_train = data_tr.drop(excluded, axis=1)
-        X_test = data_te.drop(excluded, axis=1)
-
         report = 0
-        conf_m = 0
         roc_auc = 0
+        stab_model = 0
+        stab_model_list = [0]
+        stab_shap = 0
+        stab_shap_list = [0]
 
-        stab_shap_ad = 0
+    # Package all metrics into a dictionary
+    metrics_dict = {
+        'f1-score': report['1']['f1-score'],
+        'recall': report['1']['recall'],
+        'precision': report['1']['precision'],
+        'roc_auc': roc_auc,
+        'stab_model': stab_model,
+        'stab_model_list': stab_model_list,
+        'stab_shap': stab_shap,
+        'stab_shap_list': stab_shap_list,
+    }
 
-    # Stability Index
-    stab_model, stab_model_list = stability_measure_model(X_train, X_test, model,
-                                            gamma=hyper['contamination'],
-                                            unif=True,
-                                            iterations=1,
-                                            beta_flavor=2)
-
-    stab_shap, stab_shap_list = local_stability_measure(X_train, X_test, model,
-                                          gamma=0.5,
-                                          iterations=25,
-                                          beta_flavor=2)
-
-    return report, conf_m, roc_auc, stab_model, stab_model_list, stab_shap_list, stab_shap, stab_shap_ad
+    return metrics_dict
