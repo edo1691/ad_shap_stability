@@ -32,7 +32,7 @@ def metrics_iforest(df, model, stratify=True, random_state=42):
                                                               beta_flavor=2)
         # Local Interpretability Stability Index
         stab_shap, stab_shap_list = local_stability_measure(X_train, X_test, model,
-                                                            gamma=0.5,
+                                                            gamma=0.1,
                                                             iterations=25,
                                                             beta_flavor=2)
     else:

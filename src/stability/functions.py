@@ -300,7 +300,11 @@ def local_stability_measure(Xtr, Xte, model, gamma=0.1, iterations=500, psi=0.8,
     point_rankings = np.array(results).transpose((1, 2, 0))
 
     # Normalize rankings
-    normalized_point_rankings = normalize_rankings(point_rankings)
+    # normalized_point_rankings = normalize_rankings(point_rankings)
+    normalized_point_rankings = point_rankings / ft_col_te  # lower rank = more normal
+
+    # std rankings
+    # normalized_point_rankings = np.std(normalized_point_rankings, axis=2)
 
     # Calculate beta distribution parameters
     alpha_param, beta_param = calculate_beta_parameters(psi, gamma, beta_flavor)
@@ -310,23 +314,21 @@ def local_stability_measure(Xtr, Xte, model, gamma=0.1, iterations=500, psi=0.8,
 
     # Compute stability scores using the beta distribution and rankings
     stability_scores = np.zeros(nte)
+    stability_scores_list = []
 
-    for j in range(nte):
+    for i in range(nte):
         instance_stabilities = []
-        for ii in range(ft_col_te):
-            p_min, p_max = np.min(normalized_point_rankings[j, ii]), np.max(normalized_point_rankings[j, ii])
-            p_std = np.std(normalized_point_rankings[j, ii])
+        for f in range(ft_col_te):
+            p_min, p_max = np.min(normalized_point_rankings[i, f]), np.max(normalized_point_rankings[i, f])
+            p_std = np.std(normalized_point_rankings[i, f])
             p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
             instance_stabilities.append(p_area * p_std)
         # Compute aggregated stability for the current test instance across all features
-        stability_scores[j] = np.mean(np.minimum(1, np.array(instance_stabilities) / random_stdev))
+        stability_scores[i] = np.mean(np.minimum(1, np.array(instance_stabilities) / random_stdev))
+        stability_scores_list.append(np.minimum(1, np.array(instance_stabilities) / random_stdev))
 
     # Average stability scores over all iterations to get a single measure per instance
-    stability_scores_per_instance = 1.0 - stability_scores
-    instability_scores = 1.0 - stability_scores_per_instance
+    stability_scores = 1.0 - stability_scores
+    stability_scores_list = 1.0 - np.array(stability_scores_list)
 
-    return stability_scores, instability_scores
-
-# std_per_instance_and_feature = np.std(normalized_point_rankings, axis=2)
-
-# mean_std_devs_per_instance = np.mean(std_per_instance_and_feature, axis=1)
+    return stability_scores, stability_scores_list
