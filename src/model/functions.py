@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import IsolationForest
 from src.metric.functions import metrics_iforest
 from src.utils.functions import generate_estimators_max_features
@@ -51,7 +52,7 @@ def train_and_evaluate_iforest(train_data: pd.DataFrame, dataset_id: str, hyper:
 
     # Ensure 'y' column is present
     if 'y' not in train_data.columns:
-        train_data['y'] = 1
+        train_data['y'] = np.random.choice([0, 1], size=len(train_data))
     X = train_data.loc[:, ~train_data.columns.isin(excluded_cols_all)]
     y = train_data['y']
 

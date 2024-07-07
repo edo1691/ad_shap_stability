@@ -102,7 +102,7 @@ def fs_datasets_hyperparams(dataset):
         # arrhythmia
         ("arrhythmia"): {
             "contamination": 0.1,
-            "max_samples": 256,
+            "max_samples": 'auto',
             "n_estimators": 100,
         },
         # mammography

@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
-import seaborn as sns
+from matplotlib.patches import Patch
 
 
 def plot_3d_surface(df, x_label, y_label, z_label, ax, fontsize_title=12, fontsize_axes=8, cmap='inferno', x_step=10, y_step=10,
@@ -96,94 +96,112 @@ def plot_2d_surface(df, ax, fontsize_title=8, fontsize_axes=8, feat='precision')
               ncol=3)
 
 
-def boxplot_stability(df0, df1, ax, fontsize_title=8, fontsize_axes=8, color_without_fs='steelblue', color_with_fs='skyblue', title='', save_path=None):
+def boxplot_stability(df, size=1):
     """
-    Generates a 2x1 grid of plots for comparing stability metrics between dataframes without and with feature selection.
+    Plots box plots for the 'shap_stab' column from a single DataFrame, differentiated by the 'dataset' column,
+    using grayscale colors, with added transparency to the box plots.
 
     Parameters:
-    - df0: pandas.DataFrame without feature selection.
-    - df1: pandas.DataFrame with feature selection.
-    - ax: The Axes object or array of Axes objects on which to draw the plots.
-    - fontsize: Font size for plot text elements. Defaults to 8.
-    - color_without_fs: Color for the boxplot without feature selection. Defaults to 'steelblue'.
-    - color_with_fs: Color for the boxplot with feature selection. Defaults to 'skyblue'.
-    - title: Title for the entire figure. Optional.
-    - save_path: Path where to save the figure. If None, the figure is not saved. Optional.
+    - df: A pandas DataFrame containing the 'shap_stab' and 'dataset' columns.
     """
+    df_names = df['dataset'].unique()  # Get unique dataset names
+    fig, ax = plt.subplots(figsize=(size * 1.8 * len(df_names), 6))
 
-    # Plot 1: SHAP Stability vs Number of Estimators (Without FS)
-    sns.boxplot(data=df0, x='n_estimators', y='shap_stab', color=color_without_fs, ax=ax[0])
-    ax[0].set_title('Without Feature Selection', fontsize=fontsize_title)
-    ax[0].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
-    ax[0].set_ylabel('Stability', fontsize=fontsize_axes)
-    ax[0].tick_params(axis='x', labelsize=fontsize_axes)
-    ax[0].tick_params(axis='y', labelsize=fontsize_axes)
+    # Grayscale colors for the box plots with transparency
+    colors = ['0.2', '0.7']  # Dark gray for 'Benchmark', light gray for 'Our Model'
+    alpha_value = 0.6  # Adjust transparency here
 
-    # Plot 2: SHAP Stability vs Number of Estimators (With FS)
-    sns.boxplot(data=df1, x='n_estimators', y='shap_stab', color=color_with_fs, ax=ax[1])
-    ax[1].set_title('With Feature Selection', fontsize=fontsize_title)
-    ax[1].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
-    ax[1].set_ylabel('Stability', fontsize=fontsize_axes)
-    ax[1].tick_params(axis='x', labelsize=fontsize_axes)
-    ax[1].tick_params(axis='y', labelsize=fontsize_axes)
+    positions = []
+    for i, dataset_name in enumerate(df_names):
+        dataset_df = df[df['dataset'] == dataset_name]
 
-    # Adjust layout
+        # Assuming there are only two types for benchmark and model within each dataset
+        benchmark_data = dataset_df[dataset_df['hpo'] == 'Benchmark']['stab_shap']
+        model_data = dataset_df[dataset_df['hpo'] == 'Our model']['stab_shap']
+
+        # Boxplot for benchmark data
+        bp1 = ax.boxplot(benchmark_data, positions=[2 * i + 1], widths=0.6, patch_artist=True,
+                         boxprops=dict(facecolor=colors[0], alpha=alpha_value), medianprops=dict(color='black'))
+
+        # Boxplot for model data
+        bp2 = ax.boxplot(model_data, positions=[2 * i + 2], widths=0.6, patch_artist=True,
+                         boxprops=dict(facecolor=colors[1], alpha=alpha_value), medianprops=dict(color='black'))
+
+        positions.extend([2 * i + 1, 2 * i + 2])
+
+    ax.set_xticks([pos for pos in positions if pos % 2 == 0])
+    ax.set_xticklabels(df_names)
+
+    ax.set_ylabel('Stability Index')
+
+    # Adjust legend to indicate transparency
+    legend_patches = [Patch(color=colors[0], label='Benchmark', alpha=alpha_value),
+                      Patch(color=colors[1], label='Our Model', alpha=alpha_value)]
+    ax.legend(handles=legend_patches, loc='lower right')
+
+    ax.set_xlim(0, 2 * len(df_names) + 1)
+
+    # Flatten the list of lists into a single list
+    all_values = [item for sublist in df.stab_shap for item in sublist]
+    # Find the minimum value
+    min_value = min(all_values)
+    max_value = max(all_values)
+    ax.set_ylim(min_value - 0.1, max_value + 0.05)
+
     plt.tight_layout()
-
-    # Optionally save the figure if a path is provided
-    if save_path:
-        plt.savefig(save_path, bbox_inches='tight')
-
-    # Show the plots
     plt.show()
 
 
-def lineplot_stability(dataframes, ax, fontsize_title=12, fontsize_axes=8, colors=None, labels=None, save_path=None):
+def lineplot_stability(df, ax, fontsize_title=8, fontsize_axes=6, primary_feat='precision',
+                    secondary_feat='stability index'):
     """
-    Generates line plots for comparing stability metrics across different configurations.
+    Plots a chosen feature (e.g., precision) and stability index against number of estimators for different n_feats values side by side,
+    with the chosen feature on the left y-axis and the stability index on the right y-axis. Adjusts legend names based on the 'hpo' column
+    and merges legends into one in the lower right corner.
 
     Parameters:
-    - dataframes: A list of pandas.DataFrame objects to plot. Each DataFrame represents a different scenario.
-    - ax: Array of Axes objects on which to draw the plots. Should be of length 2 for this function.
-    - fontsize: Font size for plot text elements. Defaults to 12.
-    - colors: A list of colors for the plots. Length should match the number of dataframes.
-    - labels: A list of labels for the legend, corresponding to each dataframe.
-    - save_path: Path where to save the figure. If None, the figure is not saved. Optional.
+    - df: DataFrame containing the columns 'n_estimators', 'n_feats', 'precision', 'stability index', and 'hpo'.
+    - ax: The matplotlib axes object where the plot will be drawn.
+    - fontsize_title: Font size for the title.
+    - fontsize_axes: Font size for the axes labels.
+    - primary_feat: The primary feature to be plotted (e.g., 'precision').
+    - secondary_feat: The secondary feature to be plotted on the second y-axis (e.g., 'stability index').
     """
-    # Set default colors and labels if none provided
-    if colors is None:
-        colors = ['steelblue', 'skyblue', 'green', 'orange', 'yellow', 'purple']
-    if labels is None:
-        labels = ['Without FS', 'With FS-100%', 'With FS-80%', 'With FS-60%', 'With FS-40%', 'With FS-20%']
+    ax2 = ax.twinx()
 
-    # Mean SHAP Stability vs Number of Estimators and Max features selected (AUPRC)
-    for df, color, label in zip(dataframes, colors, labels):
-        sns.pointplot(data=df, x='n_estimators', y='roc_auc', color=color, markers='', linestyles='--', ci=None,
-                      ax=ax[0], label=label)
-    ax[0].set_title('AUPRC vs Number of Estimators', fontsize=fontsize_title)
-    ax[0].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
-    ax[0].set_ylabel('ROC', fontsize=fontsize_axes)
-    ax[0].legend(title='Criteria', fontsize=fontsize_axes, loc='lower right', ncol=3)
-    ax[0].tick_params(axis='x', labelsize=fontsize_axes)
-    ax[0].tick_params(axis='y', labelsize=fontsize_axes)
+    styles_ax1 = {'Benchmark': '-', 'Our model': '-'}
+    colors_ax1 = {'Benchmark': '0.2', 'Our model': '0.7'}
 
-    # Mean SHAP Stability vs Number of Estimators
-    for df, color, label in zip(dataframes, colors, labels):
-        sns.pointplot(data=df, x='n_estimators', y='stability index', color=color, markers='', linestyles='--', ci=None,
-                      ax=ax[1], label=label)
-    ax[1].set_title('Mean Stability vs Number of Estimators', fontsize=fontsize_title)
-    ax[1].set_xlabel('Number of Estimators', fontsize=fontsize_axes)
-    ax[1].set_ylabel('Mean Stability', fontsize=fontsize_axes)
-    ax[1].legend(title='Criteria', fontsize=fontsize_axes, loc='lower right', ncol=3)
-    ax[1].tick_params(axis='x', labelsize=fontsize_axes)
-    ax[1].tick_params(axis='y', labelsize=fontsize_axes)
+    styles_ax2 = {'Benchmark': '--', 'Our model': '--'}
+    colors_ax2 = {'Benchmark': '0.2', 'Our model': '0.7'}
 
-    # Adjust layout
-    plt.tight_layout()
+    for (n_feats, hpo), group in df.groupby(['n_feats', 'hpo']):
+        label = f"{hpo} (n_feats={n_feats})"
+        ax.plot(group['n_estimators'], group[primary_feat], styles_ax1[hpo], color=colors_ax2[hpo],
+                label=f"{primary_feat}, {label}")
+        ax2.plot(group['n_estimators'], group[secondary_feat], styles_ax2[hpo], color=colors_ax2[hpo], alpha=0.8,
+                 label=f"{secondary_feat}, {label}")
 
-    # Optionally save the figure if a path is provided
-    if save_path:
-        plt.savefig(save_path, bbox_inches='tight')
+    ax.set_xlabel('Number of Estimators', fontsize=fontsize_axes)
+    ax.set_ylabel(primary_feat.capitalize(), fontsize=fontsize_axes)
+    ax2.set_ylabel(secondary_feat.capitalize(), fontsize=fontsize_axes)
+    ax.set_title(df.dataset.unique()[0].capitalize(), fontsize=fontsize_title)
 
-    # Show the plots
-    plt.show()
+    ax.tick_params(axis='x', labelsize=fontsize_axes)
+    ax.tick_params(axis='y', labelsize=fontsize_axes)
+    ax2.tick_params(axis='y', labelsize=fontsize_axes)
+
+    # Collecting handles and labels for both axes
+    handles1, labels1 = ax.get_legend_handles_labels()
+    handles2, labels2 = ax2.get_legend_handles_labels()
+
+    # Merging legends from both axes
+    handles = handles1 + handles2
+    labels = labels1 + labels2
+
+    # Creating a single legend
+    ax2.legend(handles, labels, fontsize=fontsize_axes - 2, loc='lower right')
+
+    y_ticks = [i * 0.1 for i in range(0, 11)]
+    ax.set_yticks(y_ticks)
+    ax2.set_yticks(y_ticks)
