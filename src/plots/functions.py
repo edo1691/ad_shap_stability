@@ -152,10 +152,9 @@ def boxplot_stability(df, size=1):
     plt.show()
 
 
-def lineplot_stability(df, ax, fontsize_title=8, fontsize_axes=6, primary_feat='precision',
-                    secondary_feat='stability index'):
+def lineplot_stability(df, ax, fontsize_title=8, fontsize_axes=6, primary_feat='precision', secondary_feat='stability index'):
     """
-    Plots a chosen feature (e.g., precision) and stability index against number of estimators for different n_feats values side by side,
+    Plots a chosen feature (e.g., precision) and stability index against the number of estimators for different n_feats values side by side,
     with the chosen feature on the left y-axis and the stability index on the right y-axis. Adjusts legend names based on the 'hpo' column
     and merges legends into one in the lower right corner.
 
@@ -169,39 +168,35 @@ def lineplot_stability(df, ax, fontsize_title=8, fontsize_axes=6, primary_feat='
     """
     ax2 = ax.twinx()
 
-    styles_ax1 = {'Benchmark': '-', 'Our model': '-'}
-    colors_ax1 = {'Benchmark': '0.2', 'Our model': '0.7'}
-
-    styles_ax2 = {'Benchmark': '--', 'Our model': '--'}
-    colors_ax2 = {'Benchmark': '0.2', 'Our model': '0.7'}
+    # Define styles and colors
+    styles = {'Benchmark': '-', 'Our model': '-'}
+    colors = {'Benchmark': '0.2', 'Our model': '0.7'}
+    secondary_styles = {'Benchmark': '--', 'Our model': '--'}
 
     for (n_feats, hpo), group in df.groupby(['n_feats', 'hpo']):
         label = f"{hpo} (n_feats={n_feats})"
-        ax.plot(group['n_estimators'], group[primary_feat], styles_ax1[hpo], color=colors_ax2[hpo],
-                label=f"{primary_feat}, {label}")
-        ax2.plot(group['n_estimators'], group[secondary_feat], styles_ax2[hpo], color=colors_ax2[hpo], alpha=0.8,
-                 label=f"{secondary_feat}, {label}")
+        ax.plot(group['n_estimators'], group[primary_feat], styles[hpo], color=colors[hpo], label=f"{primary_feat}, {label}")
+        ax2.plot(group['n_estimators'], group[secondary_feat], secondary_styles[hpo], color=colors[hpo], alpha=0.8, label=f"{secondary_feat}, {label}")
 
+    # Set axis labels and title
     ax.set_xlabel('Number of Estimators', fontsize=fontsize_axes)
     ax.set_ylabel(primary_feat.capitalize(), fontsize=fontsize_axes)
     ax2.set_ylabel(secondary_feat.capitalize(), fontsize=fontsize_axes)
-    ax.set_title(df.dataset.unique()[0].capitalize(), fontsize=fontsize_title)
+    ax.set_title(df['dataset'].iloc[0].capitalize(), fontsize=fontsize_title)
 
+    # Set tick parameters
     ax.tick_params(axis='x', labelsize=fontsize_axes)
     ax.tick_params(axis='y', labelsize=fontsize_axes)
     ax2.tick_params(axis='y', labelsize=fontsize_axes)
 
-    # Collecting handles and labels for both axes
-    handles1, labels1 = ax.get_legend_handles_labels()
+    # Collect and merge legends from both axes
+    handles, labels = ax.get_legend_handles_labels()
     handles2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(handles + handles2, labels + labels2, fontsize=fontsize_axes - 2, loc='lower right')
 
-    # Merging legends from both axes
-    handles = handles1 + handles2
-    labels = labels1 + labels2
-
-    # Creating a single legend
-    ax2.legend(handles, labels, fontsize=fontsize_axes - 2, loc='lower right')
-
-    y_ticks = [i * 0.1 for i in range(0, 11)]
-    ax.set_yticks(y_ticks)
-    ax2.set_yticks(y_ticks)
+    # Set y-ticks for both y-axes starting from 0
+    min_primary, max_primary = df[primary_feat].min(), df[primary_feat].max()
+    # y_ticks = [i * 0.1 for i in range(max(0, int(min_primary * 10) - 1), min(1, int(max_primary * 10) + 1))]
+    y_ticks = [i * 0.1 for i in range(0, 7)]
+    #ax.set_yticks(y_ticks)
+    #ax2.set_yticks(y_ticks)
