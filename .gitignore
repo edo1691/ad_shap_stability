@@ -33,7 +33,7 @@ MANIFEST
 
 
 # Project
-/test
+#/test
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
