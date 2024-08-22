@@ -1,99 +1,58 @@
-# Template to apply Machine Learning Models
+# Stability Index for Local Interpretability in Machine Learning
 
-Project to train predictive model to identify bad clients in credit risk.
+This project is focused on unsupervised models to identify anomalies in financial scenarios. Our approach not only enhances model performance but also ensures robust interpretability by integrating advanced machine learning techniques with SHAP (SHapley Additive exPlanations) values, fostering greater trust in the model's predictions.
 
-The most important features are described bellow:
+## Key Features
 
-*  Template
-*  Machine Learning
-*  Statistical Learning
-*  Classification Models
-*  Regression Models
+* **Stability Index for Local Interpretability**: Introducing a new stability measure that quantifies the consistency of the model in ranking important features under data perturbations, crucial for building user trust.
+* **Explainable AI (XAI) Models**: Enhancing transparency and understanding of model decisions through SHAP values.
+* **Unsupervised Machine Learning**: Utilizing techniques like Isolation Forest for anomaly detection, crucial in identifying high-risk clients.
+* **Robust Anomaly Detection**: Ensuring reliable and consistent predictions even under varying conditions.
 
-## Commit Strategy
-------------------
+## Project Structure
 
-If you want to contribute, follow this [guide](https://github.com/edo1691/Template_ML)
+### Commit Strategy
 
-## Project Documentation
-------------------------
+To contribute, please follow the [contribution guide](https://github.com/edo1691/ad_shap_stability).
 
-TBD.
+### Project Documentation
 
-## Environment Settings
------------------------
+Comprehensive project documentation will be added soon. Stay tuned for detailed insights into our methodology and findings.
 
-### Data
+### Environment Setup
 
-If you want to read the details of the dataset and variables, follow this [guide](https://archive.ics.uci.edu/ml/datasets/statlog+(german+credit+data))
+It's recommended to use a virtual environment for running this project to ensure consistency across different systems.
 
-### Virtual Environment Set-up
+#### Data
 
-It is highly recommended setting up a virtual environment for the model pipeline developed in
-Python language.
+For details on the dataset and variables used in this project, please refer to this [guide](https://archive.ics.uci.edu/ml/datasets/statlog+(german+credit+data)).
 
-#### Windows
+#### Virtual Environment Set-up
+
+**Windows**
 ```bash
-
 # Install environment
 conda env create -p .\venv -f .\bin\local\environment.yml
-
 # Activate the venv
-conda activate \Users\eduardosepulveda\workspace_github_pers\Anomaly_detection\venv
+conda activate \Users\eduardosepulveda\workspace_github_pers\ad_shap_stability\venv
 ```
 
-#### MacOS
+**MacOS**
 ```bash
-
 # Install environment
 conda env create -p ./venv -f ./bin/local/environment.yml
-
 # Activate the venv
-conda activate /Users/allianz/workspace_github_pers/Anomaly_detection/venv
+conda activate /Users/allianz/workspace_github_pers/ad_shap_stability/venv
 
-# Special libraries in mac M1
-
+# Special libraries for mac M1
 # conda install lightgbm
 # pip install psycopg2
 # pip install psycopg2-binary --force-reinstall --no-cache-dir
 ```
 
-## Data Structure
------------------
-The directory structure is the following:
-
-```markdown
-    └── data
-        ├── inputs 
-        │   ├── data_db_201912.csv
-        │   ├── data_db_202012.csv
-        │   ├── ...
-        │   ├── data_db_202012.pq
-        │   └── data_db_202112.pq
-        ├── intermediates
-        │   ├── data_input_201912.pq
-        │   ├── ...
-        │   ├── data_input_202012.pq
-        │   ├── ...
-        │   └── data_input_pred_202201.pq
-        ├── models
-        │   ├── 20191231_{model_tgt}_{model_type}_select.txt
-        │   ├── ...
-        │   └── 20191231_{model_tgt}_{model_type}_model.pkl
-        └── outputs
-            ├── 202112_data_output_{YYYYMM_YYYYMM:train period}.pq
-            ├── ...
-            ├── 202112_data_output_{YYYYMM_YYYYMM:validatoin period}.pq
-            ├── ...
-            └── 202201_data_pred_output_{YYYYMM:prediction date}.pq  
-```
-Where /inputs is the general directory where all the raw files are stored, /models is where the backups
-of the models, feature selection, etc... are stored.
-
-
-## Maintainers
+**Maintainer**
 ------------------
 
 The developers responsible for the development and maintaining of this project.
 
-* **Eduardo Sepúlveda** - *Author/Maintainer* - [eduardo.sepulveda.valdivia@gmail.com](https://github.com/edo1691)
+* **Eduardo Sepúlveda** - *Author/Maintainer* - [eduardo.sepulveda@kuleuven.be](https://github.com/edo1691)
