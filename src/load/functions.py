@@ -8,6 +8,14 @@ from scipy.io import arff
 
 
 def get_fs_dataset(dataset_id, path):
+
+    if dataset_id == "example":
+        n, ft_col = 100, 5
+        df = np.random.randn(n, ft_col)  # Create the random data
+        df = pd.DataFrame(df, columns=[f'feature_{i + 1}' for i in range(ft_col)])  # Convert to DataFrame
+        # Add a new binary column 'y' with random 0 and 1 values
+        df['y'] = np.random.randint(0, 2, size=n)
+
     if (dataset_id == "arrhythmia") | (dataset_id == "cardio") | (dataset_id == "musk") | (dataset_id == "mammography"):
         data_root = os.path.join(path, "inputs", dataset_id + ".mat")
         mat = scipy.io.loadmat(data_root)
@@ -99,6 +107,12 @@ def get_fs_dataset(dataset_id, path):
 
 def fs_datasets_hyperparams(dataset):
     data = {
+        # example
+        ("example"): {
+            "contamination": 0.1,
+            "max_samples": 'auto',
+            "n_estimators": 100,
+        },
         # arrhythmia
         ("arrhythmia"): {
             "contamination": 0.1,

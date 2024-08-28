@@ -1,5 +1,6 @@
 from scipy.optimize import Bounds, LinearConstraint, minimize
 from scipy.stats import beta
+from scipy import stats
 import numpy as np
 import pandas as pd
 import shap
@@ -169,7 +170,7 @@ def stability_measure_model(
 
 
 def local_stability_measure(xtr, xte, model, gamma=0.1, iterations=500, psi=0.8, beta_flavor=2,
-                            subset_low=0.25, subset_high=0.75):
+                            subset_low=0.25, subset_high=0.75, rank_method=True):
     """
     Computes the local stability measure using parallel processing for iterations.
     """
@@ -181,42 +182,53 @@ def local_stability_measure(xtr, xte, model, gamma=0.1, iterations=500, psi=0.8,
     subsample_sizes = np.random.randint(int(ntr * subset_low), int(ntr * subset_high), size=iterations)
     subsample_indices = [np.random.choice(ntr, size=size, replace=False) for size in subsample_sizes]
 
-    # Parallelize iterations
-    results = Parallel(n_jobs=-1)(
+    # Parallelize iterations with efficient memory usage
+    results = Parallel(n_jobs=-1, backend='loky', prefer='threads')(
         delayed(iteration_function)(xtr, xte, model, indices, nte, ft_col_te) for indices in subsample_indices)
 
     # Convert list of iteration rankings into a single array
-    point_rankings = np.array(results).transpose((1, 2, 0))
+    point_rankings = np.stack(results, axis=-1)
 
     # Normalize rankings
     normalized_point_rankings = point_rankings / ft_col_te  # lower rank = more normal
 
-    # Calculate beta distribution parameters
-    alpha_param, beta_param = calculate_beta_parameters(psi, gamma, beta_flavor)
+    if rank_method:
+        # Vectorized implementation of stability calculations
+        num_slices, num_events, num_rankings = normalized_point_rankings.shape
 
-    # compute the stability score for multiple iterations
-    random_stdev = np.sqrt((ft_col_te + 1) * (ft_col_te - 1) / (12 * ft_col_te ** 2))
+        # Calculate the mode for each event using the scipy's optimized mode function
+        mode_values = stats.mode(normalized_point_rankings, axis=2, keepdims=True)[0]
 
-    # Compute stability scores using the beta distribution and rankings
-    stability_scores = np.zeros(nte)
-    stability_scores_list = []
+        # Calculate the changes relative to the mode for each event in a vectorized manner
+        ranking_changes = np.abs(normalized_point_rankings - mode_values)
 
-    for i in range(nte):
-        instance_stabilities = []
-        for f in range(ft_col_te):
-            p_min, p_max = np.min(normalized_point_rankings[i, f]), np.max(normalized_point_rankings[i, f])
-            p_std = np.std(normalized_point_rankings[i, f])
-            p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
-            instance_stabilities.append(p_area * p_std)
-        # Compute aggregated stability for the current test instance across all features
-        stability_scores[i] = np.mean(np.minimum(1, np.array(instance_stabilities) / random_stdev))
-        stability_scores_list.append(np.minimum(1, np.array(instance_stabilities) / random_stdev))
+        # Weighted changes calculation
+        with np.errstate(divide='ignore', invalid='ignore'):  # To handle division by zero safely
+            weighted_changes = ranking_changes / np.where(normalized_point_rankings != 0, normalized_point_rankings, 1)
 
-    # Average stability scores over all iterations to get a single measure per instance
-    stability_scores = 1.0 - stability_scores
-    stability_scores_list = 1.0 - np.array(stability_scores_list)
+        stability_scores = 1 - np.sum(weighted_changes, axis=2) / (num_rankings - 1)
+        stability_percentages = np.mean(np.clip(stability_scores, 0, 1), axis=1)
 
-    return stability_scores, stability_scores_list
+        return stability_percentages, stability_scores, normalized_point_rankings
+
+    else:
+        # Calculate beta distribution parameters
+        alpha_param, beta_param = calculate_beta_parameters(psi, gamma, beta_flavor)
+
+        # Compute stability scores using the beta distribution and rankings
+        p_min = np.min(normalized_point_rankings, axis=2)
+        p_max = np.max(normalized_point_rankings, axis=2)
+        p_std = np.std(normalized_point_rankings, axis=2)
+
+        p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
+        instance_stabilities = p_area * p_std
+
+        random_stdev = np.sqrt((ft_col_te + 1) * (ft_col_te - 1) / (12 * ft_col_te ** 2))
+
+        stability_scores = 1.0 - np.mean(np.clip(instance_stabilities / random_stdev, 0, 1), axis=1)
+        stability_scores_list = 1.0 - np.clip(instance_stabilities / random_stdev, 0, 1)
+
+        return stability_scores, stability_scores_list, normalized_point_rankings
 
 
 def calculate_beta_parameters(psi, gamma, beta_flavor):
