@@ -171,54 +171,50 @@ def stability_measure_model(
 
 def local_stability_measure(xtr, xte, model, gamma=0.1, iterations=500, psi=0.8, beta_flavor=2,
                             subset_low=0.25, subset_high=0.75, rank_method=True):
-    """
-    Computes the local stability measure using parallel processing for iterations.
-    """
     np.random.seed(331)
     ntr, _ = xtr.shape
     nte, ft_col_te = xte.shape
 
-    # Generate subsample indices for all iterations in advance
+    # Generate subsample sizes for all iterations
     subsample_sizes = np.random.randint(int(ntr * subset_low), int(ntr * subset_high), size=iterations)
-    subsample_indices = [np.random.choice(ntr, size=size, replace=False) for size in subsample_sizes]
+
+    # Ensure that the subsample size does not exceed the population size
+    subsample_sizes = np.minimum(subsample_sizes, ntr)
+
+    # Generate subsample indices with correct sizes
+    subsample_indices = [
+        np.random.choice(ntr, size=size, replace=False)
+        for size in subsample_sizes
+    ]
 
     # Parallelize iterations with efficient memory usage
     results = Parallel(n_jobs=-1, backend='loky', prefer='threads')(
-        delayed(iteration_function)(xtr, xte, model, indices, nte, ft_col_te) for indices in subsample_indices)
+        delayed(iteration_function)(xtr, xte, model, indices, nte, ft_col_te)
+        for indices in subsample_indices
+    )
 
-    # Convert list of iteration rankings into a single array
-    point_rankings = np.stack(results, axis=-1)
-
-    # Normalize rankings
-    normalized_point_rankings = point_rankings / ft_col_te  # lower rank = more normal
+    # Stack and normalize rankings
+    point_rankings = np.stack(results, axis=-1) / ft_col_te
 
     if rank_method:
-        # Vectorized implementation of stability calculations
-        num_slices, num_events, num_rankings = normalized_point_rankings.shape
+        num_rankings = point_rankings.shape[-1]
 
-        # Calculate the mode for each event using the scipy's optimized mode function
-        mode_values = stats.mode(normalized_point_rankings, axis=2, keepdims=True)[0]
+        mode_values = stats.mode(point_rankings, axis=2, keepdims=True)[0]
 
-        # Calculate the changes relative to the mode for each event in a vectorized manner
-        ranking_changes = np.abs(normalized_point_rankings - mode_values)
+        ranking_changes = np.abs(point_rankings - mode_values)
+        ranking_changes = ranking_changes / np.maximum(point_rankings, 1e-10)
 
-        # Weighted changes calculation
-        with np.errstate(divide='ignore', invalid='ignore'):  # To handle division by zero safely
-            weighted_changes = ranking_changes / np.where(normalized_point_rankings != 0, normalized_point_rankings, 1)
-
-        stability_scores = 1 - np.sum(weighted_changes, axis=2) / (num_rankings - 1)
+        stability_scores = 1 - np.sum(ranking_changes, axis=2) / (num_rankings - 1)
         stability_percentages = np.mean(np.clip(stability_scores, 0, 1), axis=1)
 
-        return stability_percentages, stability_scores, normalized_point_rankings
+        return stability_percentages, stability_scores, point_rankings
 
     else:
-        # Calculate beta distribution parameters
         alpha_param, beta_param = calculate_beta_parameters(psi, gamma, beta_flavor)
 
-        # Compute stability scores using the beta distribution and rankings
-        p_min = np.min(normalized_point_rankings, axis=2)
-        p_max = np.max(normalized_point_rankings, axis=2)
-        p_std = np.std(normalized_point_rankings, axis=2)
+        p_min = np.min(point_rankings, axis=2)
+        p_max = np.max(point_rankings, axis=2)
+        p_std = np.std(point_rankings, axis=2)
 
         p_area = beta.cdf(p_max, alpha_param, beta_param) - beta.cdf(p_min, alpha_param, beta_param)
         instance_stabilities = p_area * p_std
@@ -228,7 +224,7 @@ def local_stability_measure(xtr, xte, model, gamma=0.1, iterations=500, psi=0.8,
         stability_scores = 1.0 - np.mean(np.clip(instance_stabilities / random_stdev, 0, 1), axis=1)
         stability_scores_list = 1.0 - np.clip(instance_stabilities / random_stdev, 0, 1)
 
-        return stability_scores, stability_scores_list, normalized_point_rankings
+        return stability_scores, stability_scores_list, point_rankings
 
 
 def calculate_beta_parameters(psi, gamma, beta_flavor):
@@ -296,24 +292,26 @@ def iteration_function(xtr, xte, model, sample_indices, nte, ft_col_te):
     """
     Performs operations for a single iteration: model fitting and SHAP value computation.
     """
-    # Check if xtr is a DataFrame or ndarray and select the subsample accordingly
+    # Select the subsample based on the type of xtr
     if isinstance(xtr, pd.DataFrame):
-        xs = xtr.iloc[sample_indices, :].astype(np.float32)
+        xs = xtr.iloc[sample_indices, :].values.astype(np.float32, copy=False)
     else:  # Assuming xtr is a numpy array
-        xs = xtr[sample_indices, :].astype(np.float32)
+        xs = xtr[sample_indices, :].astype(np.float32, copy=False)
 
     # Fit the model to the subsample
-    # Ensure n_jobs is set to utilize all available cores for parallelization, if not set already
-    if 'n_jobs' not in model.get_params() or model.get_params()['n_jobs'] != -1:
+    # Set n_jobs to -1 for parallelization, if not already set
+    if model.get_params().get('n_jobs', None) != -1:
         model.set_params(n_jobs=-1)
     model.fit(xs)
 
     # Compute SHAP values for the test set
-    shap_values = shap.TreeExplainer(model).shap_values(xte)
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(xte)
 
     # Rank features for each test instance based on their SHAP values
-    iteration_rankings = np.zeros((nte, ft_col_te), dtype=float)
-    for j in range(nte):
-        for ii, si in enumerate(np.argsort(shap_values[j, :])[::-1]):
-            iteration_rankings[j, si] = ii + 1
+    # Using argsort and broadcasting to avoid loops
+    sorted_indices = np.argsort(-shap_values, axis=1)
+    iteration_rankings = np.argsort(sorted_indices, axis=1) + 1
+
     return iteration_rankings
+
