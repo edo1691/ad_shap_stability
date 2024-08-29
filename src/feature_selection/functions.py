@@ -1,138 +1,53 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import IsolationForest
-from sklearn.metrics import f1_score
-import shap  # Assuming a function `shap_ranks` exists or is defined elsewhere that uses SHAP for feature ranking
+import shap
 
 
-def fs_iforest_with_shap(df, contamination_percentage=None, excluded_cols=None, n_trees=100, max_samples=256,
-                         n_iter_fs=1):
+def shap_feature_selection(model, X_train, X_test, feature_names, agnostic=False):
     """
-    Performs feature selection using an Isolation Forest model and SHAP values to rank features based on their
-    importance in predicting anomalies. It iteratively evaluates the importance of features using SHAP values and
-    calculates F1 scores to rank features.
+    Perform feature selection using SHAP values and return a DataFrame with selected features
+    and their corresponding SHAP values, percentages, and cumulative values.
 
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        The DataFrame containing the dataset to be used, including target variable 'y'.
-    contamination_percentage : list of float, optional
-        A list of contamination percentages to use in the Isolation Forest model. Defaults to [0.5, 1, 1.5] if None.
-    excluded_cols : list of str, optional
-        A list of column names to exclude from the feature set. Defaults to None.
-    n_trees : int, optional
-        The number of trees to use in the Isolation Forest model. Defaults to 100.
-    max_samples : int, optional
-        The number of samples to draw from X to train each base estimator. Defaults to 256.
-    n_iter_fs : int, optional
-        The number of iterations for feature selection. Defaults to 5.
+    Parameters:
+    - model: Trained model (e.g., RandomForest, XGBoost).
+    - X_train: Training dataset.
+    - X_test: Testing dataset.
+    - feature_names: List of feature names.
+    - agnostic: Whether to use model-agnostic SHAP (e.g., KernelExplainer).
 
-    Returns
-    -------
-    tuple
-        - sorted_idx (numpy.ndarray): Indices of features sorted by their importance.
-        - fi_shap (numpy.ndarray): SHAP values indicating the importance of each feature.
-        - avg_f1_ranking (numpy.ndarray): Average F1 scores for the features across iterations.
+    Returns:
+    - df: DataFrame with selected features, SHAP values, and calculated statistics.
     """
-    # Set default values for optional parameters
-    if contamination_percentage is None:
-        contamination_percentage = [0.5, 1, 1.5]
-    if excluded_cols is None:
-        excluded_cols_all = ['y', 'y_pred', 'prediction', 'y_scores']
+
+    # Calculate SHAP values
+    if agnostic:
+        explainer = shap.KernelExplainer(model.predict, X_train)
     else:
-        excluded_cols_all = ['y', 'y_pred', 'prediction', 'y_scores'] + excluded_cols
+        explainer = shap.TreeExplainer(model)
 
-    if 'y' in df.columns:
-        # Prepare the feature matrix X and target vector y
-        X = np.array(df.loc[:, ~df.columns.isin(excluded_cols_all)])
-        y = np.array(df['y'])
+    shap_values = explainer.shap_values(X_test)  # Assuming binary classification; use [0] for negative class
 
-    else:
-        # Prepare the feature matrix X and target vector y
-        df['y'] = 1
-        X = np.array(df.loc[:, ~df.columns.isin(excluded_cols_all)])
-        y = np.array(df['y'])
+    # Compute mean absolute SHAP values for each feature
+    mean_shap_values = np.mean(np.abs(shap_values), axis=0)
 
-    feature_names = df.loc[:, ~df.columns.isin(excluded_cols_all)].columns.to_numpy()
+    # Create a DataFrame
+    df = pd.DataFrame({
+        'feature': feature_names,
+        'value': mean_shap_values
+    })
 
-    # Assuming `shap_ranks` is a custom function that uses SHAP values to rank features
-    sorted_idx, fi_shap, avg_f1_ranking = shap_ranks(X, y, feature_names, n_trees=n_trees, max_samples=max_samples,
-                                                     n_iter=n_iter_fs)
+    # Sorting by value in descending order
+    df = df.sort_values(by='value', ascending=False).reset_index(drop=True)
 
-    return sorted_idx, fi_shap, avg_f1_ranking
+    # Calculate per_value (percentage of each value in the total)
+    total_value = df['value'].sum()
+    df['per_value'] = df['value'] / total_value * 100
 
+    # Calculate cumulative values and cumulative percentages
+    df['cum_value'] = df['value'].cumsum()
+    df['cum_value_percentage'] = df['per_value'].cumsum()
 
-def shap_ranks(x, y, feat_names, n_trees=100, max_samples=256, n_iter=5):
-    """
-    Ranks features based on SHAP values from an Isolation Forest model and evaluates the model's performance.
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        Feature matrix.
-    y : numpy.ndarray
-        Target vector.
-    feat_names : numpy.ndarray or list
-        Names of the features corresponding to the columns in X.
-    n_trees : int, optional
-        The number of trees for the Isolation Forest model.
-    max_samples : int, optional
-        The number of samples to draw from X to train each base estimator of the Isolation Forest model.
-    n_iter : int, optional
-        Number of iterations for SHAP value computation and feature ranking.
-
-    Returns
-    -------
-    sorted_idx : list
-        List of feature names sorted by their importance.
-    fi_shap_all : pandas.DataFrame
-        DataFrame containing features and their average SHAP values, percentage values, cumulative values, and cumulative percentage values.
-    avg_f1 : float
-        Average F1 score across iterations.
-    """
-    f1_all = []
-    fi_shap_all_frames = []
-
-    # Splitting the dataset into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
-
-    for _ in range(n_iter):
-        # Initialize and fit the Isolation Forest model
-        iforest = IsolationForest(n_estimators=n_trees, max_samples=max_samples, contamination='auto',
-                                  random_state=np.random.RandomState())
-        iforest.fit(X_train)
-
-        # Explainer initialization (assumes tree-based model for SHAP)
-        explainer = shap.TreeExplainer(iforest, X_train, model_output='raw')
-        shap_values = explainer.shap_values(X_test)
-
-        # Calculate mean absolute SHAP values for each feature
-        shap_summary = np.abs(shap_values).mean(axis=0)
-        fi_shap = pd.DataFrame(list(zip(feat_names, shap_summary)), columns=['feature', 'value'])
-        fi_shap_all_frames.append(fi_shap)
-
-        # Predictions and F1 score calculation
-        y_pred = iforest.predict(X_test)
-        y_pred = np.where(y_pred == 1, 0, 1)  # Adjusting labels for F1 score calculation
-        f1_all.append(f1_score(y_test, y_pred))
-
-    # Combine all SHAP value DataFrames and compute average values
-    fi_shap_all = pd.concat(fi_shap_all_frames).groupby('feature')['value'].mean().reset_index()
-    fi_shap_all = fi_shap_all.sort_values(by='value', ascending=False).reset_index(drop=True)
-
-    # Calculate additional statistics
-    fi_shap_all['per_value'] = (fi_shap_all['value'] / fi_shap_all['value'].sum()) * 100
-    fi_shap_all['cum_value'] = fi_shap_all['value'].cumsum()
-    fi_shap_all['cum_value_percentage'] = fi_shap_all['cum_value'] / fi_shap_all['value'].sum() * 100
-
-    # Sorted list of feature names by importance
-    sorted_idx = fi_shap_all['feature'].tolist()
-
-    # Average F1 score across iterations
-    avg_f1 = np.mean(f1_all)
-
-    return sorted_idx, fi_shap_all, avg_f1
+    return df
 
 
 def process_fi(df, fs=None):
