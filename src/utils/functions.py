@@ -84,4 +84,7 @@ def adjust_fi(df):
                     [df.iloc[:index], pd.DataFrame([row_to_duplicate.values], columns=row_to_duplicate.index),
                      df.iloc[index:]]).reset_index(drop=True)
 
+    # Remove duplicate rows based on specific columns
+    df = df.drop_duplicates(subset=['n_feats', 'cum_value', 'cum_value_percentage', 'n_feats_percentage'])
+
     return df
