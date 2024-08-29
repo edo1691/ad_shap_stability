@@ -1,13 +1,17 @@
 from src.stability.functions import local_stability_measure
 
+import logging
 from sklearn.ensemble import IsolationForest
 from sklearn.metrics import roc_auc_score, classification_report
 from sklearn.model_selection import train_test_split
 import pandas as pd
 
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 def run_model_experiment(fi_shap_all, df, hyper, gamma=0.146, iterations=10,
-                                   n_estimators_list=None, seed=42, dataset_id=None):
+                         n_estimators_list=None, seed=42, dataset_id=None):
     """
     Optimized version of the run_model_experiment function to improve performance.
     """
@@ -28,12 +32,18 @@ def run_model_experiment(fi_shap_all, df, hyper, gamma=0.146, iterations=10,
         n_features = len(selected_features)
         n_features_cum_shap_percentage = row['cum_value_percentage']
 
+        # Log the start of processing for the current number of features
+        logging.info(f'Starting experiment with {n_features} features.')
+
         # Use only selected features
         xtr = xtr_all[selected_features]
         xte = xte_all[selected_features]
 
         # Loop over each n_estimators value
         for n_estimators in n_estimators_list:
+            # Log the start of processing for the current number of estimators
+            logging.info(f'Starting model training with {n_features} features and {n_estimators} estimators.')
+
             # Update the hyperparameter dictionary with the current n_estimators
             hyper['n_estimators'] = n_estimators
 
