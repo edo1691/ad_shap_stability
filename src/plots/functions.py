@@ -1,13 +1,21 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 import numpy as np
 import pandas as pd
 
+import os
 
-def plots_metrics(metrics_df, feat_imp=None,
+
+def plots_metrics(metrics_df, dataset_id,
+                  feat_imp=None,
                   metrics_list=None,
                   metrics_merge_list=None,
-                  x_axis_line_plots=None, x_axis_boxplots=None):
+                  x_axis_line_plots=None,
+                  x_axis_boxplots=None,
+                  x_axis_start=None,
+                  x_axis_end=None):  # Allow None to dynamically calculate start
+
     if metrics_list is None:
         metrics_list = ['f1-score', 'recall', 'precision', 'roc_auc', 'smli', 'smli_all']
     if feat_imp is not None:
@@ -32,10 +40,21 @@ def plots_metrics(metrics_df, feat_imp=None,
     if x_axis_boxplots is None:
         x_axis_boxplots = sorted(metrics_df['n_estimators'].unique())
 
+    # Calculate the minimum x-axis start from boxplots if not provided
+    if x_axis_start is None:
+        x_axis_start = min(x_axis_boxplots)
+
+    # Calculate the maximum x-axis end from boxplots
+    if x_axis_end is None:
+        x_axis_end = max(x_axis_boxplots)
+
     # Handle metrics_merge_list
     if metrics_merge_list is not None:
         merged_metrics = [m for m in metrics_list if m in metrics_merge_list]
-        metrics_list = [m for m in metrics_list if m not in metrics_merge_list]
+        if 'smli_all' in metrics_merge_list:
+            metrics_list = [m for m in metrics_list if m not in metrics_merge_list or m == 'smli_all']
+        else:
+            metrics_list = [m for m in metrics_list if m not in metrics_merge_list]
         metrics_list.insert(0, 'merged_metrics')  # Insert a placeholder for merged metrics
     else:
         merged_metrics = []
@@ -52,7 +71,7 @@ def plots_metrics(metrics_df, feat_imp=None,
 
     # Set up the figure with varying widths based on n_estimators
     fig, axes = plt.subplots(total_rows, len(unique_features),
-                             figsize=(sum(plot_widths) * 5, 5 * total_rows),
+                             figsize=(sum(plot_widths) * 12, 4 * total_rows),  # Increase the size here
                              gridspec_kw={'width_ratios': boxplot_widths})
 
     # Handle cases where there's only one subplot
@@ -64,11 +83,11 @@ def plots_metrics(metrics_df, feat_imp=None,
         axes = np.expand_dims(axes, -1)
 
     # Create a blue color palette large enough to cover all metrics
-    num_colors_needed = max(len(unique_features), len(merged_metrics))
+    num_colors_needed = max(len(unique_features), len(merged_metrics) + (1 if 'smli_all' in metrics_merge_list else 0))
     blue_palette = sns.color_palette("Blues", n_colors=num_colors_needed)
 
     # Extend the palette with grey if needed
-    if len(merged_metrics) > num_colors_needed:
+    if len(merged_metrics) + (1 if 'smli_all' in metrics_merge_list else 0) > num_colors_needed:
         blue_palette.extend(sns.color_palette("Greys", n_colors=len(merged_metrics) - num_colors_needed))
 
     # Calculate y-axis limits for each row with a 10% margin
@@ -82,6 +101,9 @@ def plots_metrics(metrics_df, feat_imp=None,
                 for merged_metric in merged_metrics:
                     row_min = min(row_min, subset_df[merged_metric].min())
                     row_max = max(row_max, subset_df[merged_metric].max())
+                if 'smli_all' in metrics_merge_list:
+                    row_min = min(row_min, subset_df['smli_all'].min())
+                    row_max = max(row_max, subset_df['smli_all'].max())
             else:
                 row_min = min(row_min, subset_df[metric].min())
                 row_max = max(row_max, subset_df[metric].max())
@@ -97,28 +119,35 @@ def plots_metrics(metrics_df, feat_imp=None,
 
             if metric == 'merged_metrics':
                 for j, merged_metric in enumerate(merged_metrics):
-                    ax.plot(subset_df['n_estimators'], subset_df[merged_metric], marker='o', linestyle='-', color=blue_palette[j],
+                    ax.plot(subset_df['n_estimators'], subset_df[merged_metric], marker='o', linestyle='-',
+                            color=blue_palette[j],
                             label=merged_metric)
+                if 'smli_all' in metrics_merge_list:
+                    ax.plot(subset_df['n_estimators'], subset_df['smli_all'], marker='o', linestyle='-', color='red',
+                            label='smli_all')
                 ax.legend()
             else:
                 ax.plot(subset_df['n_estimators'], subset_df[metric], marker='o', linestyle='-', color=blue_palette[i],
                         label=f'{n_feat} Features')
 
+            # Modify the title to include dataset_id and n_feat
             if m == 0:
-                ax.set_title(f'{n_feat} Features')
+                ax.set_title(f'{dataset_id} - {n_feat} Features')
             if i == 0:
                 ax.set_ylabel(metric.replace('_', ' ').capitalize() if metric != 'merged_metrics' else 'Metrics')
             if not include_smli_all and m == len(non_smli_all_metrics) - 1:
                 ax.set_xlabel('Number of Estimators')
             else:
                 ax.set_xlabel('' if include_smli_all else 'Number of Estimators')
+
+            # Set the same X-axis limits for all plots
+            ax.set_xlim([x_axis_start, x_axis_end])
             ax.set_xticks(x_axis_line_plots)
-            ax.set_xlim([min(x_axis_line_plots), max(x_axis_line_plots)])
             ax.set_ylim(y_limits[m])  # Set the y-limits for all plots in this row with margin
             ax.grid(True)
 
-    # Add the stability boxplots in the last row only if smli_all is in metrics_list
-    if include_smli_all:
+    # Add the stability boxplots in the last row only if smli_all is in metrics_list and not in metrics_merge_list
+    if include_smli_all and 'smli_all' not in metrics_merge_list:
         stability_row = total_rows - 1
         row_min = np.inf
         row_max = -np.inf
@@ -130,12 +159,11 @@ def plots_metrics(metrics_df, feat_imp=None,
                 smli_values = subset_df[subset_df['n_estimators'] == n_estimators]['smli_all'].values
                 if len(smli_values) > 0:
                     if isinstance(smli_values[0], np.ndarray):
-                        flattened_values = smli_values[0].astype(float)
-                        row_min = min(row_min, np.min(flattened_values))
-                        row_max = max(row_max, np.max(flattened_values))
+                        flattened_values = np.concatenate([v.astype(float).flatten() for v in smli_values])
                     else:
-                        row_min = min(row_min, float(smli_values[0]))
-                        row_max = max(row_max, float(smli_values[0]))
+                        flattened_values = np.array([float(v) for v in smli_values])
+                    row_min = min(row_min, np.min(flattened_values))
+                    row_max = max(row_max, np.max(flattened_values))
 
         # Add 10% margin to the min and max
         margin = 0.1 * (row_max - row_min)
@@ -150,14 +178,14 @@ def plots_metrics(metrics_df, feat_imp=None,
                 smli_values = subset_df[subset_df['n_estimators'] == n_estimators]['smli_all'].values
                 if len(smli_values) > 0:
                     if isinstance(smli_values[0], np.ndarray):
-                        plot_data.append(smli_values[0].astype(float))
+                        plot_data.append(np.concatenate([v.astype(float).flatten() for v in smli_values]))
                     else:
-                        plot_data.append([float(smli_values[0])])
+                        plot_data.append([float(v) for v in smli_values])
                 else:
                     plot_data.append([])
 
             sns.boxplot(data=plot_data, ax=ax, palette=blue_palette)
-            ax.set_title(f'{n_feat} Features' if stability_row == 0 else "")
+            ax.set_title(f'{dataset_id} - {n_feat} Features' if stability_row == 0 else "")
             ax.set_xlabel('Number of Estimators')
             ax.set_xticks(range(len(x_axis_boxplots)))
             ax.set_xticklabels(x_axis_boxplots)
@@ -168,3 +196,31 @@ def plots_metrics(metrics_df, feat_imp=None,
 
     plt.tight_layout()
     plt.show()
+
+
+# Function to load dataset and plot metrics
+def process_and_plot(dataset_id, data_root,
+                     feat_imp=None,
+                     metrics_list=None,
+                     metrics_merge_list=None,
+                     x_axis_start=12.25,
+                     x_axis_end=212.25):
+
+    # Construct file paths
+    path_fi_shap = os.path.join(data_root, "outputs", f"{dataset_id}_fi_shap")
+    path_shap = os.path.join(data_root, "outputs", f"{dataset_id}_shap.parquet")
+
+    # Load the feature importance and SHAP values
+    features = pd.read_parquet(path_fi_shap)
+    df = pd.read_parquet(path_shap)
+
+    # Plot the metrics
+    plots_metrics(
+        metrics_df=df,
+        dataset_id=dataset_id,
+        feat_imp=feat_imp,  # Adjust this as needed
+        metrics_list=metrics_list,
+        metrics_merge_list=metrics_merge_list,
+        x_axis_start=x_axis_start,
+        x_axis_end=x_axis_end
+    )
