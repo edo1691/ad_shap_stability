@@ -124,7 +124,9 @@ dmypy.json
 .pyre/
 
 # Data
+test/
 data/
+.parquet
 
 # Proxy
 Create_venv_local.bat
