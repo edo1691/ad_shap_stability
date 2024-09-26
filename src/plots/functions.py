@@ -7,14 +7,9 @@ import pandas as pd
 import os
 
 
-def plots_metrics(metrics_df, dataset_id,
-                  feat_imp=None,
-                  metrics_list=None,
-                  metrics_merge_list=None,
-                  x_axis_line_plots=None,
-                  x_axis_boxplots=None,
-                  x_axis_start=None,
-                  x_axis_end=None):  # Allow None to dynamically calculate start
+def plots_metrics(metrics_df, dataset_id, feat_imp=None, metrics_list=None, metrics_merge_list=None,
+                  x_axis_line_plots=None, x_axis_boxplots=None, x_axis_start=None, x_axis_end=None,
+                  save_plot=None, save_dir=None):  # New parameters added for saving plots
 
     if metrics_list is None:
         metrics_list = ['f1-score', 'recall', 'precision', 'roc_auc', 'smli', 'smli_all']
@@ -111,6 +106,9 @@ def plots_metrics(metrics_df, dataset_id,
         margin = 0.1 * (row_max - row_min)
         y_limits.append((row_min - margin, row_max + margin))
 
+    # Define a list of markers to use for different lines
+    markers = ['o', 's', '^', 'D', 'v', 'p', '*', 'X', 'P', 'h']  # Add more markers as needed
+
     # Plot the metrics
     for m, metric in enumerate(non_smli_all_metrics):
         for i, n_feat in enumerate(unique_features):
@@ -119,15 +117,17 @@ def plots_metrics(metrics_df, dataset_id,
 
             if metric == 'merged_metrics':
                 for j, merged_metric in enumerate(merged_metrics):
-                    ax.plot(subset_df['n_estimators'], subset_df[merged_metric], marker='o', linestyle='-',
+                    marker = markers[j % len(markers)]  # Cycle through the list of markers
+                    ax.plot(subset_df['n_estimators'], subset_df[merged_metric], marker=marker, linestyle='-',
                             color=blue_palette[j],
                             label=merged_metric)
                 if 'smli_all' in metrics_merge_list:
-                    ax.plot(subset_df['n_estimators'], subset_df['smli_all'], marker='o', linestyle='-', color='red',
+                    ax.plot(subset_df['n_estimators'], subset_df['smli_all'], marker='X', linestyle='-', color='red',
                             label='smli_all')
                 ax.legend()
             else:
-                ax.plot(subset_df['n_estimators'], subset_df[metric], marker='o', linestyle='-', color=blue_palette[i],
+                marker = markers[i % len(markers)]  # Cycle through the list of markers
+                ax.plot(subset_df['n_estimators'], subset_df[metric], marker=marker, linestyle='-', color=blue_palette[i],
                         label=f'{n_feat} Features')
 
             # Modify the title to include dataset_id and n_feat
@@ -195,16 +195,21 @@ def plots_metrics(metrics_df, dataset_id,
             ax.grid(True)
 
     plt.tight_layout()
-    plt.show()
+
+    # Save plot if save_plot is specified
+    if save_plot:
+        if save_dir is None:
+            save_dir = "./"  # Default to current directory if save_dir is not provided
+        save_path = os.path.join(save_dir, f"{dataset_id}_metrics_plot.png")
+        plt.savefig(save_path)
+        print(f"Plot saved to {save_path}")
+    else:
+        plt.show()
 
 
 # Function to load dataset and plot metrics
-def process_and_plot(dataset_id, data_root,
-                     feat_imp=None,
-                     metrics_list=None,
-                     metrics_merge_list=None,
-                     x_axis_start=12.25,
-                     x_axis_end=212.25):
+def process_and_plot(dataset_id, data_root, feat_imp=None, metrics_list=None, metrics_merge_list=None,
+                     x_axis_start=12.25, x_axis_end=212.25, save_plot=None, save_dir=None):  # New parameters added
 
     # Construct file paths
     path_fi_shap = os.path.join(data_root, "outputs", f"{dataset_id}_fi_shap")
@@ -222,5 +227,7 @@ def process_and_plot(dataset_id, data_root,
         metrics_list=metrics_list,
         metrics_merge_list=metrics_merge_list,
         x_axis_start=x_axis_start,
-        x_axis_end=x_axis_end
+        x_axis_end=x_axis_end,
+        save_plot=save_plot,  # Pass the new save_plot parameter
+        save_dir=save_dir     # Pass the new save_dir parameter
     )
