@@ -123,6 +123,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Data
+data/
+
 # Proxy
 Create_venv_local.bat
 environment.yml.bak
